@@ -1,10 +1,14 @@
 /**
- * Authentication Utilities
+ * Authentication Module
  * 
- * Auth utilities will be implemented in Phase 1.3:
- * - middleware.ts: Auth middleware
- * - helpers.ts: Auth helper functions
- * - providers.ts: Auth provider configuration
+ * Centralized authentication utilities for the application.
  */
 
-// Placeholder exports - will be implemented in Phase 1.3
+// Client configuration
+export * from './client';
+
+// Server-side helpers
+export * from './helpers';
+
+// Context and hooks (client-side only)
+export { AuthProvider, useAuth, useUser, useSession } from '@/lib/contexts/AuthContext';

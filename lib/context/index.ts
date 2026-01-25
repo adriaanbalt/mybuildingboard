@@ -1,10 +1,17 @@
 /**
  * React Context Providers
  * 
- * Context providers will be implemented in Phase 1:
- * - AuthContext: Auth context provider
- * - AppContext: App context provider (multi-tenant)
- * - QueryClientProvider: React Query provider
+ * Context providers for the application.
  */
 
-// Placeholder exports - will be implemented in Phase 1
+// Auth context (implemented in Phase 1.3)
+export { AuthProvider, useAuth, useUser, useSession } from './AuthContext';
+
+// App context (implemented in Phase 1.4)
+export {
+  AppProvider,
+  useApp,
+  useAppId,
+  useAppConfig,
+  useAppMembership,
+} from './AppContext';
