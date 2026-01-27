@@ -47,5 +47,33 @@ export function createServerClient() {
   })
 }
 
+/**
+ * Get Supabase admin client for server-side operations
+ * Uses service role key for admin operations (bypasses RLS)
+ * Singleton pattern to reuse the same client instance
+ */
+let adminClient: ReturnType<typeof createSupabaseClient<Database>> | null = null
+
+export function getSupabaseAdmin() {
+  if (!adminClient) {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!serviceRoleKey) {
+      throw new Error(
+        'Missing SUPABASE_SERVICE_ROLE_KEY. Required for admin operations.'
+      )
+    }
+
+    adminClient = createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  }
+
+  return adminClient
+}
+
 // Re-export for convenience
 export { createClient } from '@supabase/supabase-js'

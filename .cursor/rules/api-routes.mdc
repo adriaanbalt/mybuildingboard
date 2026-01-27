@@ -1,0 +1,423 @@
+---
+description: Standards and patterns for Next.js API route handlers. Covers authentication, error handling, logging, validation, and response patterns.
+globs: "app/api/**/*.ts,app/api/**/route.ts"
+alwaysApply: false
+---
+
+# API Routes Standards
+
+## Core Requirements
+
+### 1. Route Handler Structure
+
+**ALWAYS** use named exports for HTTP methods:
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  // Handler implementation
+}
+
+export async function POST(request: NextRequest) {
+  // Handler implementation
+}
+```
+
+**For dynamic routes** (Next.js 15+), use `Promise<{ ... }>` for params:
+```typescript
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ bucketId: string }> }
+) {
+  const { bucketId } = await params;
+  // Handler implementation
+}
+```
+
+### 2. Authentication & Authorization
+
+**ALWAYS** authenticate requests:
+```typescript
+import { createClient } from '@/lib/database/client';
+
+export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error || !user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+  
+  // Continue with authenticated user
+}
+```
+
+**For admin operations**, use `getSupabaseAdmin()`:
+```typescript
+import { getSupabaseAdmin } from '@/lib/database/client';
+
+const supabase = getSupabaseAdmin();
+```
+
+**Check permissions** before accessing resources:
+```typescript
+import { checkBucketAccess } from '@/lib/auth/permissions';
+
+const hasAccess = await checkBucketAccess(user.id, bucketId);
+if (!hasAccess) {
+  return NextResponse.json(
+    { error: 'Forbidden' },
+    { status: 403 }
+  );
+}
+```
+
+### 3. Logging
+
+**ALWAYS** use structured logging:
+```typescript
+import { createLogger } from '@/lib/api/logger';
+
+const logger = createLogger('RouteName');
+
+export async function POST(request: NextRequest) {
+  logger.info('Processing request', {
+    path: request.nextUrl.pathname,
+    method: request.method
+  });
+  
+  try {
+    // Handler logic
+    logger.info('Request processed successfully');
+  } catch (error) {
+    logger.error('Request failed', { error });
+    throw error;
+  }
+}
+```
+
+### 4. Error Handling
+
+**ALWAYS** use standardized error handling:
+```typescript
+import { handleApiError } from '@/lib/api/errors';
+
+export async function POST(request: NextRequest) {
+  try {
+    // Handler logic
+  } catch (error) {
+    const { status, response } = handleApiError(error, {
+      logError: true,
+      showToUser: true,
+      context: { endpoint: '/api/example' }
+    });
+    
+    return NextResponse.json(response, { status });
+  }
+}
+```
+
+### 5. Input Validation
+
+**ALWAYS** validate request data:
+```typescript
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  
+  // Validate required fields
+  if (!body.name || typeof body.name !== 'string') {
+    return NextResponse.json(
+      { error: 'Name is required and must be a string' },
+      { status: 400 }
+    );
+  }
+  
+  // Validate UUIDs
+  if (body.bucketId && !isValidUUID(body.bucketId)) {
+    return NextResponse.json(
+      { error: 'Invalid bucket ID format' },
+      { status: 400 }
+    );
+  }
+}
+```
+
+### 6. Response Patterns
+
+**Success responses**:
+```typescript
+// Single resource
+return NextResponse.json({ data: resource }, { status: 200 });
+
+// Created resource
+return NextResponse.json({ data: resource }, { status: 201 });
+
+// No content
+return new NextResponse(null, { status: 204 });
+```
+
+**Error responses**:
+```typescript
+// Bad request
+return NextResponse.json(
+  { error: 'Invalid input', details: validationErrors },
+  { status: 400 }
+);
+
+// Unauthorized
+return NextResponse.json(
+  { error: 'Authentication required' },
+  { status: 401 }
+);
+
+// Forbidden
+return NextResponse.json(
+  { error: 'Insufficient permissions' },
+  { status: 403 }
+);
+
+// Not found
+return NextResponse.json(
+  { error: 'Resource not found' },
+  { status: 404 }
+);
+
+// Internal server error
+return NextResponse.json(
+  { error: 'Internal server error' },
+  { status: 500 }
+);
+```
+
+### 7. Rate Limiting
+
+**For public endpoints**, use rate limiting:
+```typescript
+import { withRateLimit } from '@/lib/api/rate-limit';
+
+export const POST = withRateLimit(async (request: NextRequest) => {
+  // Handler logic
+});
+```
+
+### 8. Webhook Signature Verification
+
+**ALWAYS** verify external webhook signatures:
+
+**Slack webhooks**:
+```typescript
+import crypto from 'crypto';
+
+const raw = await request.text();
+const signature = request.headers.get('x-slack-signature');
+const timestamp = request.headers.get('x-slack-request-timestamp');
+
+// Verify timestamp (5 minute tolerance)
+const now = Math.floor(Date.now() / 1000);
+if (Math.abs(now - parseInt(timestamp!)) > 300) {
+  return new Response('Request timestamp too old', { status: 401 });
+}
+
+// Verify signature
+const hmac = crypto.createHmac('sha256', process.env.SLACK_SIGNING_SECRET!);
+const base = `v0:${timestamp}:${raw}`;
+const hash = `v0=${hmac.update(base).digest('hex')}`;
+
+if (!crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature!))) {
+  return new Response('Invalid signature', { status: 401 });
+}
+```
+
+**Stripe webhooks**:
+```typescript
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const signature = request.headers.get('stripe-signature')!;
+const body = await request.text();
+
+try {
+  const event = stripe.webhooks.constructEvent(
+    body,
+    signature,
+    process.env.STRIPE_WEBHOOK_SECRET!
+  );
+  // Process event
+} catch (error) {
+  return NextResponse.json(
+    { error: 'Invalid signature' },
+    { status: 400 }
+  );
+}
+```
+
+### 9. Database Operations
+
+**Use appropriate Supabase client**:
+```typescript
+// User-scoped operations
+const supabase = await createClient();
+
+// Admin operations
+const supabase = getSupabaseAdmin();
+```
+
+**Handle database errors**:
+```typescript
+import { handleDatabaseError } from '@/lib/api/errors';
+
+try {
+  const { data, error } = await supabase
+    .from('table')
+    .select('*')
+    .eq('id', id)
+    .single();
+    
+  if (error) {
+    const { userMessage, shouldRetry } = handleDatabaseError(error, 'fetch');
+    return NextResponse.json(
+      { error: userMessage },
+      { status: 500 }
+    );
+  }
+} catch (error) {
+  // Handle unexpected errors
+}
+```
+
+### 10. Request Body Parsing
+
+**Handle different content types**:
+```typescript
+// JSON
+const body = await request.json();
+
+// Form data
+const formData = await request.formData();
+const value = formData.get('key');
+
+// Text (for webhooks)
+const raw = await request.text();
+```
+
+### 11. Query Parameters
+
+**Parse and validate query parameters**:
+```typescript
+const { searchParams } = new URL(request.url);
+const page = parseInt(searchParams.get('page') || '1');
+const limit = parseInt(searchParams.get('limit') || '10');
+
+// Validate
+if (page < 1 || limit < 1 || limit > 100) {
+  return NextResponse.json(
+    { error: 'Invalid pagination parameters' },
+    { status: 400 }
+  );
+}
+```
+
+### 12. CORS Headers
+
+**For external API access**, set CORS headers:
+```typescript
+import { corsHeaders } from '@/lib/api/cors';
+
+return NextResponse.json(data, {
+  status: 200,
+  headers: corsHeaders
+});
+```
+
+## Common Patterns
+
+### Pagination
+```typescript
+const page = parseInt(searchParams.get('page') || '1');
+const limit = parseInt(searchParams.get('limit') || '20');
+const offset = (page - 1) * limit;
+
+const { data, count } = await supabase
+  .from('table')
+  .select('*', { count: 'exact' })
+  .range(offset, offset + limit - 1);
+
+return NextResponse.json({
+  data,
+  pagination: {
+    page,
+    limit,
+    total: count,
+    totalPages: Math.ceil((count || 0) / limit)
+  }
+});
+```
+
+### Bulk Operations
+```typescript
+const items = await request.json();
+
+if (!Array.isArray(items) || items.length === 0) {
+  return NextResponse.json(
+    { error: 'Items array is required' },
+    { status: 400 }
+  );
+}
+
+// Process in batches to avoid overwhelming the database
+const batchSize = 100;
+const results = [];
+
+for (let i = 0; i < items.length; i += batchSize) {
+  const batch = items.slice(i, i + batchSize);
+  const { data, error } = await supabase
+    .from('table')
+    .insert(batch);
+    
+  if (error) {
+    // Handle error
+  }
+  
+  results.push(...(data || []));
+}
+
+return NextResponse.json({ data: results }, { status: 201 });
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Always authenticate requests
+- ✅ Use structured logging with context
+- ✅ Handle errors gracefully with user-friendly messages
+- ✅ Validate all input data
+- ✅ Use proper HTTP status codes
+- ✅ Verify webhook signatures
+- ✅ Check permissions before accessing resources
+- ✅ Use rate limiting for public endpoints
+- ✅ Return consistent response formats
+
+### DON'T:
+- ❌ Expose internal error details to users
+- ❌ Skip authentication checks
+- ❌ Use console.log for production logging
+- ❌ Trust user input without validation
+- ❌ Skip webhook signature verification
+- ❌ Return sensitive data in responses
+- ❌ Use generic error messages without context
+- ❌ Skip permission checks
+- ❌ Use synchronous operations for I/O
+
+## Testing API Routes
+
+When testing API routes:
+1. Mock authentication
+2. Test error cases
+3. Verify response formats
+4. Test rate limiting
+5. Verify webhook signatures
+6. Test permission checks
+7. Validate input handling

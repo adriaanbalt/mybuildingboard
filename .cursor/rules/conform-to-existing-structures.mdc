@@ -1,0 +1,5 @@
+---
+alwaysApply: true
+---
+
+if you're building something new within an existing app make sure it conforms to the existing data structures.

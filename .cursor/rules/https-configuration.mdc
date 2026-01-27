@@ -1,0 +1,242 @@
+---
+description: HTTPS configuration for local development. Covers Supabase HTTPS proxy, WebSocket URLs, and OAuth redirect URIs.
+globs: "**/*.{ts,tsx,js,json,toml},**/supabase/config.toml"
+alwaysApply: true
+---
+
+# HTTPS Configuration Rules
+
+## Local Development HTTPS Setup
+
+### Supabase HTTPS Proxy
+
+**CRITICAL**: Supabase runs on HTTP (port 54321) but the app must connect via HTTPS (port 54421) using the HTTPS proxy.
+
+1. **Always start Supabase with HTTPS proxy**:
+   ```bash
+   yarn supabase:https
+   # OR
+   supabase start
+   yarn supabase:https-proxy
+   ```
+
+2. **Environment Variables**:
+   - `NEXT_PUBLIC_SUPABASE_URL` must be `https://127.0.0.1:54421` (HTTPS proxy port)
+   - Never use `http://127.0.0.1:54321` directly in the app
+   - The proxy forwards HTTPS (54421) → HTTP (54321)
+
+3. **Supabase Config** (`supabase/config.toml`):
+   - API port: `54321` (HTTP - internal)
+   - OAuth redirect_uri: `https://127.0.0.1:54421/auth/v1/callback` (HTTPS proxy port)
+   - TLS enabled: `false` (using proxy instead)
+
+### WebSocket URLs
+
+**ALWAYS use `wss://` (secure WebSocket) when using HTTPS**:
+- ✅ `NEXT_PUBLIC_WS_URL=wss://localhost:3000`
+- ❌ `NEXT_PUBLIC_WS_URL=ws://localhost:3000` (insecure, will fail with HTTPS)
+
+### OAuth Redirect URIs
+
+**MUST match exactly** across all three places:
+
+1. **Environment Variables**:
+   - `SLACK_REDIRECT_URI=https://localhost:3000/api/slack/oauth/callback`
+   - Teams: `OAUTH_REDIRECT_URI=https://localhost:3000/api/teams/oauth/callback`
+
+2. **OAuth Provider Settings** (Google/Slack/Microsoft):
+   - Must include the exact same URL
+   - Case-sensitive, must match character-for-character
+
+3. **Supabase Config** (`supabase/config.toml`):
+   - `redirect_uri = "https://127.0.0.1:54421/auth/v1/callback"` (for Google OAuth)
+   - `additional_redirect_urls` must include all app callback URLs
+
+### Port Reference
+
+| Service | HTTP Port | HTTPS Port | Notes |
+|---------|-----------|------------|-------|
+| Supabase API | 54321 | 54421 | Via HTTPS proxy |
+| Supabase DB | 54322 | - | Direct connection only |
+| Supabase Studio | 54323 | - | Web UI |
+| Next.js Dev Server | 3000 | 3000 | Same port, HTTPS via dev server |
+| Background Worker | 8081 | 8080 | HTTP backend on 8081, HTTPS proxy on 8080 |
+| Text Extractor | 8001 | 8000 | HTTP backend on 8001, HTTPS proxy on 8000 |
+| Supabase HTTPS Proxy | - | 54421 | Proxies Supabase HTTP→HTTPS |
+| Text Extractor HTTPS Proxy | - | 8000 | Proxies Text Extractor HTTP→HTTPS |
+| Worker HTTPS Proxy | - | 8080 | Proxies Worker HTTP→HTTPS |
+
+### Environment Variable Standards
+
+**Required HTTPS URLs**:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://127.0.0.1:54421
+NEXT_PUBLIC_APP_URL=https://localhost:3000
+NEXT_PUBLIC_API_URL=https://localhost:3000
+NEXT_PUBLIC_WS_URL=wss://localhost:3000  # Note: wss:// not ws://
+SLACK_REDIRECT_URI=https://localhost:3000/api/slack/oauth/callback
+```
+
+**Never use HTTP for**:
+- Supabase URL (always use HTTPS proxy port 54421)
+- WebSocket URLs (always use wss://)
+- OAuth redirect URIs (always use https://)
+
+### Common Issues & Fixes
+
+1. **404 on Supabase REST API**:
+   - Check: Is HTTPS proxy running? `lsof -ti:54421`
+   - Fix: `yarn supabase:https-proxy`
+   - Verify: `curl -k https://127.0.0.1:54421/auth/v1/health`
+
+2. **WebSocket connection failed**:
+   - Check: Is `NEXT_PUBLIC_WS_URL` using `wss://`?
+   - Fix: Change `ws://` to `wss://`
+
+3. **OAuth redirect mismatch**:
+   - Check: All three places match exactly (env var, provider settings, Supabase config)
+   - Fix: Update all three to match character-for-character
+
+4. **Port conflicts**:
+   - Supabase HTTP: 54321 (must be free)
+   - HTTPS Proxy: 54421 (must be free)
+   - Check: `lsof -ti:54321` and `lsof -ti:54421`
+
+### Verification Commands
+
+```bash
+# Check HTTPS configuration
+./scripts/utils/check-https-config.sh
+
+# Test Supabase HTTPS
+curl -k https://127.0.0.1:54421/auth/v1/health
+
+# Check if proxy is running
+lsof -ti:54421
+
+# View proxy logs
+tail -f /tmp/supabase-https-proxy.log
+```
+
+### When Creating New Features
+
+1. **API Endpoints**: Always use `NEXT_PUBLIC_API_URL` (HTTPS)
+2. **WebSocket Connections**: Always use `wss://` when app is HTTPS
+3. **OAuth Integrations**: Always use HTTPS redirect URIs
+4. **External API Calls**: Prefer HTTPS, especially for OAuth callbacks
+
+### Development Workflow
+
+**CRITICAL: Always use HTTPS for local development**
+
+1. **Recommended: Start all services with HTTPS**:
+   ```bash
+   yarn dev:https
+   ```
+   This starts all services with HTTPS automatically.
+
+2. **Alternative: Manual startup**:
+   ```bash
+   # Start Supabase
+   supabase start
+   
+   # Start HTTPS proxies
+   yarn supabase:https-proxy      # Supabase HTTPS proxy (port 54421)
+   yarn text-extractor:https-proxy  # Text Extractor HTTPS proxy (port 8000)
+   yarn worker:https-proxy        # Worker HTTPS proxy (port 8080)
+   
+   # Start services
+   yarn dev:https
+   ```
+
+3. **Verify HTTPS configuration**:
+   ```bash
+   ./scripts/utils/check-https-config.sh
+   ```
+
+**NEVER use HTTP-only development** (`yarn dev`) as it breaks OAuth integrations and doesn't match production.
+
+### Auto-Restart for Background Services
+
+**Both Background Worker and Text Extractor include automatic restart with safeguards:**
+
+- **Auto-restart on failures**: Automatically restarts on transient errors (port conflicts, network issues)
+- **Exponential backoff**: Delays between retries: 2s, 4s, 8s, 16s, 32s
+- **Max retry limit**: 5 attempts before giving up (prevents infinite loops)
+- **Port cleanup**: Automatically kills processes using required ports before each restart
+- **Clean shutdown detection**: Exit code 0 = clean shutdown (no restart)
+- **Error logging**: Clear messages about restart attempts and common issues
+
+**What auto-restart fixes:**
+- ✅ Port conflicts (automatically cleaned up)
+- ✅ Transient network errors
+- ✅ Temporary Supabase connection issues
+- ✅ Race conditions during startup
+
+**What auto-restart doesn't fix (by design):**
+- ❌ Code bugs (will fail after 5 attempts)
+- ❌ Missing environment variables
+- ❌ Missing dependencies
+- ❌ Persistent configuration errors
+
+**Scripts:**
+- `scripts/utils/start-background-worker-local.sh` - Background Worker with auto-restart
+- `scripts/utils/start-text-extractor-local.sh` - Text Extractor with auto-restart
+
+### Production Considerations
+
+- Production uses real HTTPS (no proxy needed)
+- All URLs should be HTTPS
+- WebSocket URLs should be `wss://`
+- OAuth redirect URIs must match production domain
+
+## CRITICAL: Always Use HTTPS
+
+**This rule applies to ALL local development.**
+
+### Why HTTPS is Required
+
+1. **OAuth Integrations**: Slack, Google, Microsoft Teams OAuth require HTTPS
+2. **Production Parity**: Local development should match production environment
+3. **Security**: HTTPS is required for secure cookie handling and authentication
+4. **WebSocket Security**: Secure WebSockets (`wss://`) only work with HTTPS
+
+### Services That Must Use HTTPS
+
+- ✅ **Next.js App**: `https://localhost:3000`
+- ✅ **Supabase**: `https://127.0.0.1:54421` (via HTTPS proxy)
+- ✅ **Text Extractor**: `https://localhost:8000` (via HTTPS proxy)
+- ✅ **Background Worker**: `https://localhost:8080` (via HTTPS proxy)
+
+### SSL Verification for Localhost
+
+**All services automatically disable SSL verification for localhost** to work with self-signed certificates:
+
+- **Supabase Python Client**: Uses `httpx.Client(verify=False)` for localhost
+- **Text Extractor Requests**: Uses `requests.post(verify=False)` for localhost
+- **Node.js**: Uses `NODE_TLS_REJECT_UNAUTHORIZED=0` for localhost (via `lib/utils/tls.ts`)
+
+This is safe because:
+- Only applies to `127.0.0.1` and `localhost`
+- Only in development mode
+- Production always uses proper SSL verification
+
+### Commands
+
+**Always use:**
+```bash
+yarn dev:https  # ✅ Starts all services with HTTPS
+```
+
+**Never use:**
+```bash
+yarn dev  # ❌ HTTP-only, breaks OAuth
+```
+
+### When Creating New Services
+
+1. **Always configure HTTPS** for local development
+2. **Use HTTPS proxy pattern** if service runs on HTTP internally
+3. **Disable SSL verification** for localhost connections
+4. **Document HTTPS setup** in service README
+5. **Add to `yarn dev:https`** script to start automatically

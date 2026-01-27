@@ -1,0 +1,309 @@
+---
+description: OAuth flow strategy with HTTPS for localhost and Supabase instances. Covers the complete OAuth flow, configuration requirements, and implementation guidelines for any OAuth provider (Google, GitHub, etc.).
+globs: "**/auth/**/*.{ts,tsx},**/api/auth/**/*.ts,**/api/*/oauth/**/*.ts,**/lib/auth/**/*.ts,**/lib/contexts/AuthContext.tsx,**/supabase/config.toml"
+alwaysApply: false
+---
+
+# OAuth Flow Strategy with HTTPS
+
+## Architecture Overview
+
+The OAuth flow uses **two HTTPS endpoints**:
+1. **Supabase HTTPS** (`https://127.0.0.1:54421`) - via HTTPS proxy
+2. **Next.js App HTTPS** (`https://localhost:3000`) - via dev server
+
+## Complete OAuth Flow
+
+### Step-by-Step Flow
+
+```
+[1] User clicks "Sign in with [Provider]"
+    ↓ AuthContext.signInWithOAuth()
+    - Builds: https://localhost:3000/api/auth/callback
+    - Calls: supabase.auth.signInWithOAuth({ provider: 'google', redirectTo: callbackUrl })
+    
+[2] Supabase generates OAuth URL
+    - Supabase URL: https://127.0.0.1:54421 (HTTPS proxy)
+    - Redirects to: https://accounts.google.com/o/oauth2/v2/auth (or provider auth page)
+    
+[3] User authenticates with OAuth Provider
+    - Provider validates OAuth request
+    - User grants permissions
+    
+[4] Provider redirects back to Supabase
+    - Redirect URI: https://127.0.0.1:54421/auth/v1/callback
+    - Includes: code, state parameters
+    - HTTPS proxy forwards to Supabase HTTP (54321)
+    
+[5] Supabase exchanges code for tokens
+    - Validates code with provider
+    - Creates/updates user in auth.users
+    - Generates Supabase session
+    
+[6] Supabase redirects to Next.js callback
+    - Redirects to: https://localhost:3000/api/auth/callback?code=...
+    - Includes authorization code
+    
+[7] Next.js API Route (/api/auth/callback) - PRIMARY FLOW
+    - Exchanges code: supabase.auth.exchangeCodeForSession(code)
+    - Sets session cookies
+    - Calls resolveAccessRedirectServer() to check onboarding/subscription (if applicable)
+    - Redirects DIRECTLY to final destination
+    - NO client-side callback page needed for code flow
+    
+[8a] Client-side Callback Page (/auth/callback) - FALLBACK ONLY (PKCE hash fragments)
+    - HashFragmentHandlerInner in ClientLayout processes hash fragments
+    - Extracts tokens from hash and sets session
+    - Calls redirectFromLogin() for access control
+    - Redirects to final destination
+    
+[8b] Hash Fragment Flow (PKCE)
+    - Supabase redirects with #access_token=... instead of ?code=...
+    - HashFragmentHandlerInner detects and processes hash
+    - Sets session from hash tokens
+    - Redirects using redirectFromLogin()
+```
+
+## Critical Configuration Points
+
+### 1. Supabase Config (`supabase/config.toml`)
+
+**OAuth Provider Configuration** (example for Google):
+```toml
+[auth.external.google]
+enabled = true
+client_id = "YOUR_GOOGLE_CLIENT_ID"
+secret = "YOUR_GOOGLE_CLIENT_SECRET"
+redirect_uri = "https://127.0.0.1:54421/auth/v1/callback"  # ← Provider redirects here
+skip_nonce_check = true
+```
+
+**Additional Redirect URLs** (where Supabase can redirect after OAuth):
+```toml
+[auth]
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "https://127.0.0.1:3000/auth/callback",
+  "https://127.0.0.1:3000/api/auth/callback",  # ← Supabase redirects here
+  "https://localhost:3000",
+  "https://localhost:3000/auth/callback",
+  "https://localhost:3000/api/auth/callback"
+]
+```
+
+### 2. OAuth Provider Console (Google Cloud, GitHub, etc.)
+
+**Authorized redirect URIs** (must include exactly):
+```
+https://127.0.0.1:54421/auth/v1/callback
+```
+
+**Why this URL?**
+- OAuth provider redirects **directly to Supabase's callback endpoint**
+- Supabase handles the OAuth code exchange with the provider
+- Then Supabase redirects to your Next.js app
+
+### 3. Environment Variables
+
+```bash
+# Supabase (HTTPS via proxy)
+NEXT_PUBLIC_SUPABASE_URL=https://127.0.0.1:54421
+
+# Next.js App (HTTPS)
+NEXT_PUBLIC_APP_URL=https://localhost:3000
+```
+
+## Implementation Guidelines
+
+### OAuth Initiation (AuthContext)
+
+**ALWAYS** build callback URL using `NEXT_PUBLIC_APP_URL`:
+```typescript
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
+const callbackUrl = new URL('/api/auth/callback', baseUrl);
+
+await supabase.auth.signInWithOAuth({
+  provider: 'google', // or 'github', 'azure', etc.
+  options: {
+    redirectTo: callbackUrl.toString()  // Must be full HTTPS URL
+  }
+});
+```
+
+### Code Exchange (API Route) - PRIMARY FLOW
+
+**ALWAYS** use server-side code exchange and redirect directly:
+```typescript
+// app/api/auth/callback/route.ts
+const supabase = createRouteHandlerClient({ cookies });
+const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+// Get redirect param from query
+const redirectParam = requestUrl.searchParams.get('redirect') || 
+  requestUrl.searchParams.get('next') || '/dashboard'; // Default route
+
+// Resolve final destination (checks onboarding/subscription server-side if applicable)
+const finalDestination = await resolveAccessRedirectServer(userId, redirectParam) || redirectParam;
+
+// Redirect DIRECTLY to final destination (no client-side callback needed)
+return NextResponse.redirect(new URL(finalDestination, baseUrl));
+```
+
+**CRITICAL**: Do NOT redirect to `/auth/callback` unless handling hash fragments. Server-side redirect is faster and more reliable.
+
+### Hash Fragment Handling (PKCE Fallback)
+
+**ALWAYS** handle hash fragments in ClientLayout, not callback page:
+```typescript
+// lib/ui/ClientLayout.tsx - HashFragmentHandlerInner (inside AuthProvider)
+// Detects hash fragments, sets session, redirects
+// This is fallback for PKCE flow when Supabase uses hash fragments
+```
+
+### Post-Auth Redirect
+
+**ALWAYS** check route type before enforcing onboarding (if your app has onboarding):
+- App routes: Check onboarding, may redirect to `/onboarding?step=welcome`
+- Admin routes: Always use redirect param (no onboarding check)
+- Marketing routes: Always use redirect param (no onboarding check)
+- Profile route: Always use redirect param (no onboarding check)
+
+## HTTPS Requirements
+
+### Supabase HTTPS (Port 54421)
+- **Required**: OAuth providers require HTTPS for redirect URIs
+- **Implementation**: HTTPS proxy forwards `https://127.0.0.1:54421` → `http://127.0.0.1:54321`
+- **Start**: `yarn supabase:https` or `yarn supabase:https-proxy`
+
+### Next.js App HTTPS (Port 3000)
+- **Recommended**: OAuth callbacks should use HTTPS for security
+- **Implementation**: Next.js dev server with HTTPS enabled
+- **Start**: `yarn dev:https` (if configured)
+
+## URL Flow Reference
+
+| Step | From | To | URL | Purpose |
+|------|------|-----|-----|---------|
+| 1 | User | Supabase | `https://127.0.0.1:54421/auth/v1/authorize?provider=google&redirect_to=...` | Initiate OAuth |
+| 2 | Supabase | Provider | `https://accounts.google.com/o/oauth2/v2/auth?...` | Provider auth page |
+| 3 | Provider | Supabase | `https://127.0.0.1:54421/auth/v1/callback?code=...` | OAuth callback |
+| 4 | Supabase | Next.js API | `https://localhost:3000/api/auth/callback?code=...` | Forward to app |
+| 5 | Next.js API | Next.js Client | `https://localhost:3000/auth/callback` | Client-side handling (if needed) |
+| 6 | Next.js Client | Final | `/dashboard` or `/onboarding` | Post-auth redirect |
+
+## Common Issues & Solutions
+
+### Issue 1: "redirect_uri_mismatch" from OAuth Provider
+- **Cause**: Provider redirect URI doesn't match exactly
+- **Fix**: Ensure provider console has: `https://127.0.0.1:54421/auth/v1/callback`
+- **Check**: Must match `supabase/config.toml` `redirect_uri` exactly (character-for-character)
+
+### Issue 2: Supabase can't reach Next.js callback
+- **Cause**: `additional_redirect_urls` missing or wrong URL
+- **Fix**: Add `https://localhost:3000/api/auth/callback` to `additional_redirect_urls`
+- **Check**: Supabase config allows redirecting to your app
+
+### Issue 3: HTTPS certificate errors
+- **Cause**: Self-signed certificates not trusted
+- **Fix**: 
+  1. Accept certificate in browser when visiting `https://127.0.0.1:54421`
+  2. Ensure mkcert certificates are installed: `mkcert -install`
+
+### Issue 4: Code exchange fails
+- **Cause**: Code expired or already used
+- **Fix**: OAuth codes are single-use and expire quickly. Ensure immediate exchange
+
+### Issue 5: Callback page doesn't render (Suspense)
+- **Cause**: Using `useSearchParams()` causes Suspense, preventing component render
+- **Fix**: Read params directly from `window.location.search` instead
+- **Check**: Component should have console logs if rendering
+
+### Issue 6: Redirect parameter lost
+- **Cause**: Not preserving redirect param through OAuth flow
+- **Fix**: Store in both sessionStorage AND URL query params
+- **Check**: Verify param exists in both places after OAuth
+
+### Issue 7: Onboarding enforced for admin routes
+- **Cause**: Not checking route type before enforcing onboarding
+- **Fix**: Use route type checking to identify app routes, only enforce for app routes
+- **Check**: Admin/marketing routes should bypass onboarding
+
+### Issue 8: Hash fragments not processed
+- **Cause**: Hash fragment handler not inside AuthProvider or not running
+- **Fix**: Use `HashFragmentHandlerInner` inside `AuthProvider` in ClientLayout
+- **Check**: Should see logs when hash fragments detected
+
+### Issue 9: User stuck on callback page
+- **Cause**: Redirect logic not running or waiting for auth that never initializes
+- **Fix**: 
+  1. Check if user is authenticated even without hash
+  2. Add timeout fallback for redirect
+  3. Verify `isInitialized && user` before redirecting
+- **Check**: Console logs should show redirect being triggered
+
+## When Modifying OAuth Code
+
+### DO:
+- ✅ Use `NEXT_PUBLIC_APP_URL` for building callback URLs
+- ✅ Use HTTPS URLs for all OAuth redirects
+- ✅ Exchange codes immediately (don't store them)
+- ✅ Handle errors gracefully with user-friendly messages
+- ✅ Preserve redirect parameters through the OAuth flow (sessionStorage + URL params)
+- ✅ Handle both server-side code flow AND client-side hash fragment flow
+- ✅ Check route type before enforcing onboarding (only app routes)
+- ✅ Wait for auth initialization before redirecting
+- ✅ Use refs to prevent duplicate processing
+- ✅ Read search params directly from `window.location.search` (not useSearchParams)
+
+### DON'T:
+- ❌ Hardcode URLs (use environment variables)
+- ❌ Use HTTP URLs for OAuth callbacks
+- ❌ Store OAuth codes (they're single-use)
+- ❌ Skip error handling
+- ❌ Forget to update all three places when changing redirect URIs:
+  1. Environment variables
+  2. OAuth provider settings (Google/GitHub/Microsoft/etc.)
+  3. Supabase config
+- ❌ Use `useSearchParams()` in callback page (causes Suspense)
+- ❌ Enforce onboarding for admin/marketing routes
+- ❌ Redirect before auth is initialized
+- ❌ Rely on only one method for redirect param preservation
+- ❌ Process hash fragments outside AuthProvider
+- ❌ Create circular dependencies in useEffect
+
+## Verification Checklist
+
+Before deploying OAuth changes:
+- [ ] HTTPS proxy running on port 54421
+- [ ] Supabase running on port 54321 (HTTP)
+- [ ] OAuth provider console has redirect URI: `https://127.0.0.1:54421/auth/v1/callback`
+- [ ] Supabase config has `redirect_uri = "https://127.0.0.1:54421/auth/v1/callback"`
+- [ ] Supabase config includes Next.js callback in `additional_redirect_urls`
+- [ ] `.env.local` has `NEXT_PUBLIC_SUPABASE_URL=https://127.0.0.1:54421`
+- [ ] `.env.local` has `NEXT_PUBLIC_APP_URL=https://localhost:3000`
+- [ ] Next.js app accessible via HTTPS on port 3000
+
+## Testing OAuth Flow
+
+```bash
+# 1. Start Supabase with HTTPS
+yarn supabase:https
+
+# 2. Verify Supabase HTTPS
+curl -k https://127.0.0.1:54421/auth/v1/health
+
+# 3. Test OAuth URL directly
+open "https://127.0.0.1:54421/auth/v1/authorize?provider=google&redirect_to=https://localhost:3000/api/auth/callback"
+
+# 4. Or test from app
+# Navigate to login page and click "Sign in with [Provider]"
+```
+
+## Production Considerations
+
+- Production uses real HTTPS (no proxy needed)
+- All URLs should be HTTPS
+- OAuth redirect URIs must match production domain
+- Update OAuth provider console with production redirect URI
+- Update Supabase config with production URLs

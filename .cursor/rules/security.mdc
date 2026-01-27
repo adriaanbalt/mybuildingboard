@@ -1,0 +1,415 @@
+---
+description: Security standards for authentication, authorization, input validation, and data protection. Covers API security, webhook verification, and sensitive data handling.
+globs: "app/api/**/*.ts,lib/auth/**/*.ts,lib/api/**/*.ts"
+alwaysApply: false
+---
+
+# Security Standards
+
+## Authentication
+
+### 1. Always Authenticate Requests
+
+**ALWAYS** verify authentication in API routes:
+```typescript
+import { createClient } from '@/lib/database/client';
+
+export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error || !user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+  
+  // Continue with authenticated user
+}
+```
+
+### 2. Session Validation
+
+**Validate sessions properly**:
+```typescript
+const supabase = await createClient();
+const { data: { session }, error } = await supabase.auth.getSession();
+
+if (!session || error) {
+  return NextResponse.json(
+    { error: 'Session expired' },
+    { status: 401 }
+  );
+}
+```
+
+## Authorization
+
+### 1. Check Permissions
+
+**ALWAYS** check permissions before operations:
+```typescript
+import { checkBucketAccess } from '@/lib/auth/permissions';
+
+const hasAccess = await checkBucketAccess(user.id, bucketId);
+if (!hasAccess) {
+  return NextResponse.json(
+    { error: 'Forbidden' },
+    { status: 403 }
+  );
+}
+```
+
+### 2. Resource Ownership
+
+**Verify resource ownership**:
+```typescript
+const { data: bucket } = await supabase
+  .from('buckets')
+  .select('user_id')
+  .eq('id', bucketId)
+  .single();
+
+if (!bucket || bucket.user_id !== user.id) {
+  return NextResponse.json(
+    { error: 'Forbidden' },
+    { status: 403 }
+  );
+}
+```
+
+### 3. RLS Policies
+
+**Rely on RLS policies** but verify client-side:
+```typescript
+// RLS ensures user can only access their buckets
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('user_id', user.id); // RLS enforces this
+```
+
+## Input Validation
+
+### 1. Validate All Input
+
+**ALWAYS** validate user input:
+```typescript
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  
+  // Validate required fields
+  if (!body.name || typeof body.name !== 'string') {
+    return NextResponse.json(
+      { error: 'Name is required and must be a string' },
+      { status: 400 }
+    );
+  }
+  
+  // Validate length
+  if (body.name.length > 100) {
+    return NextResponse.json(
+      { error: 'Name must be 100 characters or less' },
+      { status: 400 }
+    );
+  }
+  
+  // Validate format
+  if (!/^[a-zA-Z0-9\s-]+$/.test(body.name)) {
+    return NextResponse.json(
+      { error: 'Name contains invalid characters' },
+      { status: 400 }
+    );
+  }
+}
+```
+
+### 2. Validate UUIDs
+
+**Validate UUID format**:
+```typescript
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+if (!isValidUUID(bucketId)) {
+  return NextResponse.json(
+    { error: 'Invalid bucket ID format' },
+    { status: 400 }
+  );
+}
+```
+
+### 3. Sanitize Input
+
+**Sanitize user input** before storing:
+```typescript
+import DOMPurify from 'isomorphic-dompurify';
+
+const sanitized = DOMPurify.sanitize(userInput);
+```
+
+## Webhook Security
+
+### 1. Verify Signatures
+
+**ALWAYS** verify webhook signatures:
+
+**Slack webhooks**:
+```typescript
+import crypto from 'crypto';
+
+const raw = await request.text();
+const signature = request.headers.get('x-slack-signature');
+const timestamp = request.headers.get('x-slack-request-timestamp');
+
+// Verify timestamp (prevent replay attacks)
+const now = Math.floor(Date.now() / 1000);
+if (Math.abs(now - parseInt(timestamp!)) > 300) {
+  return new Response('Request timestamp too old', { status: 401 });
+}
+
+// Verify signature
+const hmac = crypto.createHmac('sha256', process.env.SLACK_SIGNING_SECRET!);
+const base = `v0:${timestamp}:${raw}`;
+const hash = `v0=${hmac.update(base).digest('hex')}`;
+
+if (!crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(signature!))) {
+  return new Response('Invalid signature', { status: 401 });
+}
+```
+
+**Stripe webhooks**:
+```typescript
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const signature = request.headers.get('stripe-signature')!;
+const body = await request.text();
+
+try {
+  const event = stripe.webhooks.constructEvent(
+    body,
+    signature,
+    process.env.STRIPE_WEBHOOK_SECRET!
+  );
+  // Process event
+} catch (error) {
+  return NextResponse.json(
+    { error: 'Invalid signature' },
+    { status: 400 }
+  );
+}
+```
+
+## Environment Variables
+
+### 1. Never Expose Secrets
+
+**NEVER** expose secrets in client code:
+```typescript
+// ❌ Bad - Exposed in client
+const apiKey = process.env.STRIPE_SECRET_KEY;
+
+// ✅ Good - Server-side only
+const apiKey = process.env.STRIPE_SECRET_KEY; // In API route
+```
+
+### 2. Use NEXT_PUBLIC_ Prefix
+
+**Only use `NEXT_PUBLIC_` for safe public variables**:
+```typescript
+// ✅ Good - Safe to expose
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_APP_URL
+NEXT_PUBLIC_POSTHOG_KEY
+
+// ❌ Bad - Never expose secrets
+NEXT_PUBLIC_STRIPE_SECRET_KEY
+NEXT_PUBLIC_DATABASE_PASSWORD
+```
+
+### 3. Validate Environment Variables
+
+**Validate environment variables on startup**:
+```typescript
+import { validateEnv } from '@/lib/api/env-validation';
+
+// Throws if required variables are missing
+validateEnv();
+```
+
+## Data Protection
+
+### 1. Encrypt Sensitive Data
+
+**Encrypt sensitive data** before storing:
+```typescript
+import crypto from 'crypto';
+
+function encrypt(text: string): string {
+  const algorithm = 'aes-256-gcm';
+  const key = Buffer.from(process.env.ENCRYPTION_KEY!, 'hex');
+  const iv = crypto.randomBytes(16);
+  
+  const cipher = crypto.createCipheriv(algorithm, key, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  const authTag = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+}
+```
+
+### 2. Never Log Sensitive Data
+
+**NEVER** log passwords, tokens, or secrets:
+```typescript
+// ❌ Bad
+logger.info('User login', { password, token });
+
+// ✅ Good
+logger.info('User login', { userId: user.id });
+```
+
+### 3. Sanitize Error Messages
+
+**Don't expose internal details** in error messages:
+```typescript
+// ❌ Bad
+throw new Error(`Database error: ${error.message}`);
+
+// ✅ Good
+throw new Error('An error occurred. Please try again.');
+// Log full error internally
+logger.error('Database error', { error });
+```
+
+## SQL Injection Prevention
+
+### 1. Use Parameterized Queries
+
+**Supabase handles this automatically**, but be aware:
+```typescript
+// ✅ Good - Supabase handles parameterization
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', bucketId); // Safe
+
+// ❌ Bad - Never do this (Supabase prevents it anyway)
+// const query = `SELECT * FROM buckets WHERE id = '${bucketId}'`;
+```
+
+## Rate Limiting
+
+### 1. Implement Rate Limiting
+
+**Use rate limiting** for public endpoints:
+```typescript
+import { withRateLimit } from '@/lib/api/rate-limit';
+
+export const POST = withRateLimit(async (request: NextRequest) => {
+  // Handler logic
+});
+```
+
+### 2. Per-User Rate Limiting
+
+**Implement per-user rate limiting**:
+```typescript
+import { checkRateLimit } from '@/lib/api/rate-limit';
+
+const rateLimitResult = checkRateLimit(request);
+if (!rateLimitResult.allowed) {
+  return NextResponse.json(
+    { error: 'Rate limit exceeded' },
+    { 
+      status: 429,
+      headers: {
+        'Retry-After': rateLimitResult.retryAfter?.toString() || '60'
+      }
+    }
+  );
+}
+```
+
+## HTTPS Requirements
+
+### 1. Always Use HTTPS
+
+**ALWAYS** use HTTPS in production:
+```typescript
+// ✅ Good
+const url = 'https://api.example.com';
+
+// ❌ Bad
+const url = 'http://api.example.com';
+```
+
+### 2. WebSocket Security
+
+**Use `wss://` for secure WebSockets**:
+```typescript
+// ✅ Good
+const wsUrl = 'wss://localhost:3000';
+
+// ❌ Bad
+const wsUrl = 'ws://localhost:3000';
+```
+
+## CORS Configuration
+
+### 1. Configure CORS Properly
+
+**Use CORS headers** for external API access:
+```typescript
+import { corsHeaders } from '@/lib/api/cors';
+
+return NextResponse.json(data, {
+  status: 200,
+  headers: corsHeaders
+});
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Always authenticate requests
+- ✅ Check permissions before operations
+- ✅ Validate all user input
+- ✅ Verify webhook signatures
+- ✅ Use HTTPS in production
+- ✅ Encrypt sensitive data
+- ✅ Implement rate limiting
+- ✅ Use environment variables for secrets
+- ✅ Sanitize error messages
+- ✅ Log security events
+
+### DON'T:
+- ❌ Expose secrets in client code
+- ❌ Skip authentication checks
+- ❌ Trust user input
+- ❌ Skip webhook signature verification
+- ❌ Log sensitive data
+- ❌ Expose internal error details
+- ❌ Use HTTP in production
+- ❌ Skip rate limiting
+- ❌ Hardcode secrets
+- ❌ Skip permission checks
+
+## Security Checklist
+
+Before deploying, ensure:
+- [ ] All API routes authenticate requests
+- [ ] Permissions checked before operations
+- [ ] All input validated and sanitized
+- [ ] Webhook signatures verified
+- [ ] Secrets stored in environment variables
+- [ ] HTTPS used in production
+- [ ] Rate limiting implemented
+- [ ] Sensitive data encrypted
+- [ ] Error messages don't expose internals
+- [ ] Security events logged

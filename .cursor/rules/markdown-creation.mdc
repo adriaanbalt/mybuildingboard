@@ -1,0 +1,761 @@
+---
+description: Standards for creating markdown documentation files with proper date and time handling and template structure. CHECK THIS RULE BEFORE CREATING ANY MARKDOWN FILE.
+globs: "**/*.md"
+alwaysApply: true
+---
+
+# Markdown File Creation Standards
+
+## 🚨 CRITICAL: MANDATORY WORKFLOW - DO NOT SKIP
+
+**⚠️ IF YOU ARE ABOUT TO CREATE A `.md` FILE, YOU MUST READ AND FOLLOW THIS ENTIRE RULE FIRST.**
+
+**This rule applies to ALL markdown files being created anywhere in the repository.**
+
+---
+
+## 🔴 PRE-FLIGHT CHECK: Before Creating Any Markdown File
+
+**YOU MUST COMPLETE THESE STEPS BEFORE CREATING THE FILE:**
+
+1. **STOP** - Do not create the file yet
+2. **Read this entire rule** - Do not skip any section
+3. **Execute the mandatory workflow** - See "Mandatory Workflow" section below
+4. **Verify checklist** - Complete all items before proceeding
+
+**If you skip these steps, you will create files with incorrect headers.**
+
+---
+
+## MANDATORY CHECKLIST - Complete before creating any `.md` file:
+
+1. ✅ **Calculate current date and time** using JavaScript (see below)
+2. ✅ **Get GitHub username** using GitHub CLI: `gh api user --jq .login` (see below) - **REQUIRED STEP**
+3. ✅ **Use calculated date and time** in `**Creation Date:**` and `**Updated Date:**` fields (NOT placeholders)
+4. ✅ **Use GitHub username** (if available) in `**Github username:**` field, or leave blank if CLI unavailable
+5. ✅ **Verify date and time format** is `Month DD, YYYY at HH:MM AM/PM` (e.g., "[Month DD, YYYY at HH:MM AM/PM]")
+6. ✅ **Include required header fields** at the top of the file (including `**Github username:**`)
+7. ✅ **Follow the template structure** exactly
+
+**If you're creating a new markdown file, STOP and calculate the current date and time AND get GitHub username first!**
+
+**⚠️ THIS IS NOT OPTIONAL - YOU MUST EXECUTE THESE COMMANDS BEFORE CREATING THE FILE:**
+
+```bash
+# STEP 1: Calculate current date and time (REQUIRED - DO NOT SKIP)
+node -e "const d = new Date(); const date = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); console.log(date + ' at ' + time)"
+
+# STEP 2: Get GitHub username (REQUIRED - DO NOT SKIP)
+gh api user --jq .login
+```
+
+**If you do not execute these commands, you will create files with incorrect headers.**
+
+---
+
+## CRITICAL: Required Template Structure
+
+**ALL newly created markdown files MUST start with this exact header structure:**
+
+```markdown
+# Document Title
+
+**Creation Date:** [Full Month Name DD, YYYY at HH:MM AM/PM]
+**Updated Date:** [Full Month Name DD, YYYY at HH:MM AM/PM]
+**Github username:** [username or leave blank if unknown]
+
+---
+
+[Rest of document content]
+```
+
+### Template Example
+
+```markdown
+# Text Extractor Service - Improvements Complete
+
+**Creation Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Updated Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Github username:**
+
+---
+
+## Summary
+
+[Document content here]
+```
+
+## CRITICAL: Date and Time Handling
+
+**ALWAYS use the current date and time when creating markdown files.** Never use placeholder dates or times.
+
+### How to Get the Current Date and Time (JavaScript)
+
+**Before creating any markdown file, the AI MUST:**
+
+1. **Execute JavaScript to get the current date and time** using this code:
+
+   ```javascript
+   // Get current date and time in format: "Month DD, YYYY at HH:MM AM/PM"
+   const now = new Date();
+   const dateString = now.toLocaleDateString("en-US", {
+     month: "long",
+     day: "numeric",
+     year: "numeric",
+   });
+   const timeString = now.toLocaleTimeString("en-US", {
+     hour: "numeric",
+     minute: "2-digit",
+     hour12: true,
+   });
+   const dateTimeString = `${dateString} at ${timeString}`;
+   // Result: "[Month DD, YYYY at HH:MM AM/PM]"
+   ```
+
+2. **Use this JavaScript code** (the AI should run this logic):
+
+   ```javascript
+   // For AI: Calculate current date and time
+   const getCurrentDateTime = () => {
+     const date = new Date();
+     const dateStr = date.toLocaleDateString("en-US", {
+       month: "long",
+       day: "numeric",
+       year: "numeric",
+     });
+     const timeStr = date.toLocaleTimeString("en-US", {
+       hour: "numeric",
+       minute: "2-digit",
+       hour12: true,
+     });
+     return `${dateStr} at ${timeStr}`;
+   };
+   const currentDateTime = getCurrentDateTime();
+   // Use currentDateTime in the markdown file
+   // Example result: "[Month DD, YYYY at HH:MM AM/PM]"
+   ```
+
+3. **Date and time format requirement**: `Month DD, YYYY at HH:MM AM/PM` (e.g., "[Month DD, YYYY at HH:MM AM/PM]")
+   - **Creation Date:** Use current date and time when file is created
+   - **Updated Date:** Use current date and time when file is created, and update whenever the file is modified
+
+### Alternative: Using Node.js Command
+
+If you need to verify the date and time format, you can run:
+
+```bash
+node -e "const d = new Date(); const date = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); console.log(date + ' at ' + time)"
+```
+
+## CRITICAL: GitHub Username Handling
+
+**ALWAYS try to get the GitHub username when creating markdown files.** If GitHub CLI is not available or user is not logged in, leave the field blank.
+
+### How to Get the GitHub Username (GitHub CLI)
+
+**Before creating any markdown file, the AI MUST:**
+
+1. **Try to get GitHub username** using GitHub CLI:
+
+   ```bash
+   # Check if gh CLI is available and user is logged in
+   gh api user --jq .login
+   ```
+
+2. **If GitHub CLI is not installed:**
+   - Inform the user that GitHub CLI is required
+   - Provide installation instructions
+   - User should install and login, then continue from where they left off
+   - Leave `**Github username:**` field blank for now
+
+3. **If user is not logged in:**
+   - Inform the user they need to login: `gh auth login`
+   - User should login, then continue from where they left off
+   - Leave `**Github username:**` field blank for now
+
+4. **If GitHub username is successfully retrieved:**
+   - Use it in the `**Github username:**` field
+   - If retrieval fails, leave the field blank
+
+### Helper Scripts for GitHub Username
+
+**Option 1: Shell Script**
+
+```bash
+./scripts/utils/get-github-username.sh
+```
+
+**Option 2: Node.js Script**
+
+```bash
+node scripts/utils/get-github-username.js
+```
+
+**Both scripts will:**
+
+- Check if `gh` CLI is installed
+- Check if user is logged in
+- Provide helpful error messages if not available
+- Return the GitHub username if available
+
+### GitHub Username Field Requirements
+
+- **If available:** Use the GitHub username from `gh api user --jq .login`
+- **If not available:** Leave the field blank (empty string)
+- **Format:** Plain username (e.g., "adriaanbalt", not "@adriaanbalt")
+
+## Date and Time Format Standards
+
+### Required Date and Time Format (Month DD, YYYY at HH:MM AM/PM)
+
+```markdown
+**Creation Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Updated Date:** [Month DD, YYYY at HH:MM AM/PM]
+```
+
+**Format:** Full Month Name, Day (numeric), Year (numeric), "at", Hour:Minute AM/PM
+
+- ✅ Correct: "[Month DD, YYYY at HH:MM AM/PM]" format
+- ❌ Wrong: "[Abbreviated Month] DD, YYYY at HH:MM AM/PM" (abbreviated month)
+- ❌ Wrong: "MM/DD/YYYY at HH:MM" (numeric format, 24-hour time)
+- ❌ Wrong: "[Month] YYYY at HH:MM AM/PM" (missing day)
+- ❌ Wrong: "[Month DD, YYYY]" (missing time)
+
+## Markdown File Structure
+
+### Required Header Fields (MANDATORY)
+
+**Every newly created markdown file MUST start with:**
+
+```markdown
+# Document Title
+
+**Creation Date:** [Full Month Name DD, YYYY at HH:MM AM/PM]
+**Updated Date:** [Full Month Name DD, YYYY at HH:MM AM/PM]
+**Github username:** [username or leave blank]
+
+---
+
+[Document content]
+```
+
+### Field Requirements
+
+- **Creation Date:** Set to current date and time when file is created (auto-calculated using JavaScript)
+- **Updated Date:** Set to current date and time when file is created, and updated whenever file is modified (auto-calculated using JavaScript)
+- **Github username:** Leave blank if unknown, or fill in if known
+
+## File Creation Workflow (FOR AI)
+
+### ⚠️ MANDATORY: Before Creating Any Markdown File
+
+**THE AI MUST EXECUTE THESE TERMINAL COMMANDS BEFORE CREATING ANY MARKDOWN FILE:**
+
+**Step 1: Calculate Current Date and Time (REQUIRED)**
+```bash
+node -e "const d = new Date(); const date = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); console.log(date + ' at ' + time)"
+```
+**You MUST run this command and use the output as the date and time. Do NOT use placeholder dates or times.**
+
+**Step 2: Get GitHub Username (REQUIRED)**
+```bash
+gh api user --jq .login
+```
+**You MUST attempt to run this command. If it fails, leave the field blank but still include it.**
+
+**Step 3: Only after completing Steps 1 and 2, create the file with the header:**
+```markdown
+# Document Title
+
+**Creation Date:** [USE OUTPUT FROM STEP 1]
+**Updated Date:** [USE OUTPUT FROM STEP 1]
+**Github username:** [USE OUTPUT FROM STEP 2, OR BLANK IF UNAVAILABLE]
+
+---
+```
+
+---
+
+### Detailed Workflow (For Reference)
+
+**The AI MUST complete these steps:**
+
+1. **Calculate current date and time using JavaScript:**
+
+   ```javascript
+   // Execute this JavaScript logic to get current date and time
+   const getCurrentDateTime = () => {
+     const date = new Date();
+     const dateStr = date.toLocaleDateString("en-US", {
+       month: "long", // Full month name (January, February, etc.)
+       day: "numeric", // Day as number (1, 2, 3, etc.)
+       year: "numeric", // Full year (2025, 2024, etc.)
+     });
+     const timeStr = date.toLocaleTimeString("en-US", {
+       hour: "numeric", // Hour as number (1, 2, 3, etc.)
+       minute: "2-digit", // Minute as 2-digit (01, 02, 03, etc.)
+       hour12: true, // Use 12-hour format with AM/PM
+     });
+     return `${dateStr} at ${timeStr}`;
+   };
+   const currentDateTime = getCurrentDateTime();
+   // Example result: "[Month DD, YYYY at HH:MM AM/PM]"
+   ```
+
+2. **Get GitHub username** using GitHub CLI (REQUIRED STEP):
+
+   ```bash
+   # Try to get GitHub username - THIS IS A REQUIRED STEP
+   gh api user --jq .login
+   ```
+
+   **CRITICAL**: You MUST attempt to get the GitHub username before creating the file. Do not skip this step.
+
+   **If GitHub CLI is not installed or user is not logged in:**
+   - Inform the user they need to install/login
+   - Leave `**Github username:**` field blank
+   - User can continue after installing/logging in
+
+3. **Use the calculated date and time** in both `**Creation Date:**` and `**Updated Date:**` fields
+
+4. **Use the GitHub username** (if available) in `**Github username:**` field, or leave blank if CLI unavailable
+
+5. **Create the file** with the required header structure:
+
+   ```markdown
+   # [Document Title]
+
+   **Creation Date:** [use currentDateTime from step 1]
+   **Updated Date:** [use currentDateTime from step 1]
+   **Github username:** [use username from step 2, or leave blank]
+
+   ---
+   ```
+
+6. **Verify** the date and time format matches: "Month DD, YYYY at HH:MM AM/PM" (e.g., "[Month DD, YYYY at HH:MM AM/PM]")
+
+### Method: Using JavaScript Date and Time (REQUIRED for AI)
+
+**The AI MUST use this JavaScript code when creating markdown files:**
+
+```javascript
+// Step 1: Calculate current date and time
+const now = new Date();
+const dateStr = now.toLocaleDateString("en-US", {
+  month: "long",
+  day: "numeric",
+  year: "numeric",
+});
+const timeStr = now.toLocaleTimeString("en-US", {
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+const formattedDateTime = `${dateStr} at ${timeStr}`;
+
+// Step 2: Use formattedDateTime in the markdown file
+// formattedDateTime will be something like "[Month DD, YYYY at HH:MM AM/PM]"
+```
+
+**Step 2: Get GitHub username (if available):**
+
+```bash
+# Try to get GitHub username
+gh api user --jq .login
+```
+
+**If GitHub CLI is not available or user is not logged in:**
+
+- Inform the user: "GitHub CLI (gh) is not installed or you're not logged in. Please install it and login, then continue."
+- Leave `**Github username:**` field blank
+
+**Then create the markdown file with:**
+
+```markdown
+# Document Title
+
+**Creation Date:** ${formattedDateTime}
+**Updated Date:** ${formattedDateTime}
+**Github username:** ${githubUsername || ''}
+
+---
+```
+
+### Method 2: Using Template Script
+
+1. **Use the template script**:
+   ```bash
+   ./scripts/utils/create-doc.sh docs/deployment/my-new-doc.md
+   ```
+2. **Edit the file** to add content
+3. **Date is automatically inserted** from template
+
+### Method 3: Manual Creation
+
+1. **Get current date** (use `date` command or web search)
+2. **Create file** with proper date format
+3. **Follow the template structure** in `docs/.templates/doc-template.md`
+
+## Updating Existing Files
+
+### Auto-Update Updated Date
+
+**When modifying an existing markdown file, the AI MUST:**
+
+1. **Calculate current date and time** using the same JavaScript logic:
+
+   ```javascript
+   const getCurrentDateTime = () => {
+     const date = new Date();
+     const dateStr = date.toLocaleDateString("en-US", {
+       month: "long",
+       day: "numeric",
+       year: "numeric",
+     });
+     const timeStr = date.toLocaleTimeString("en-US", {
+       hour: "numeric",
+       minute: "2-digit",
+       hour12: true,
+     });
+     return `${dateStr} at ${timeStr}`;
+   };
+   const currentDateTime = getCurrentDateTime();
+   // Example result: "[Month DD, YYYY at HH:MM AM/PM]"
+   ```
+
+2. **Update the `**Updated Date:**` field** to the current date and time
+
+3. **Leave `**Creation Date:**` unchanged** (only update if it's missing)
+
+4. **Leave existing files as-is** if they don't have the template - only apply to newly created files
+
+## Date and Time Field Patterns
+
+### Required Field Patterns
+
+All newly created markdown files must include:
+
+- `**Creation Date:**` - Full date and time when file was created (Month DD, YYYY at HH:MM AM/PM)
+- `**Updated Date:**` - Full date and time when file was last updated (Month DD, YYYY at HH:MM AM/PM)
+- `**Github username:**` - GitHub username (can be left blank)
+
+### Example File Structure (CORRECT)
+
+```markdown
+# Background Worker Improvements
+
+**Creation Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Updated Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Github username:**
+
+---
+
+## Overview
+
+[Content here]
+
+---
+
+**Updated Date:** [Month DD, YYYY at HH:MM AM/PM]
+```
+
+## DO's and DON'Ts
+
+### DO:
+
+- ✅ **ALWAYS** use JavaScript date and time logic to calculate current date and time before creating markdown files
+- ✅ **ALWAYS** try to get GitHub username using `gh api user --jq .login` before creating markdown files
+- ✅ **ALWAYS** include the required header fields: `**Creation Date:**`, `**Updated Date:**`, `**Github username:**`
+- ✅ Use `Month DD, YYYY at HH:MM AM/PM` format (e.g., "[Month DD, YYYY at HH:MM AM/PM]") for both Creation and Updated dates
+- ✅ Auto-update `**Updated Date:**` whenever modifying an existing markdown file
+- ✅ Calculate date and time using JavaScript with both `toLocaleDateString` and `toLocaleTimeString`
+- ✅ If GitHub CLI is not available, inform user and leave username field blank
+- ✅ Verify the date and time format is correct before finalizing
+- ✅ Apply this rule to ALL markdown files being created (not just docs/)
+
+### DON'T:
+
+- ❌ **NEVER** use placeholder dates or times - always calculate from current date and time
+- ❌ Don't use hardcoded dates or times - always use JavaScript to get current date and time
+- ❌ Don't use abbreviated formats like "Jan 15, 2025 at 2:30 PM" - use full month name
+- ❌ Don't use formats like "01/15/2025 at 14:30" or "2025-01-15 14:30" - use "Month DD, YYYY at HH:MM AM/PM"
+- ❌ Don't skip the required header fields
+- ❌ Don't forget to update "Updated Date" when modifying files
+- ❌ Don't modify existing files that don't have the template (leave them as-is)
+- ❌ Don't use relative dates or times like "today" or "yesterday" (use actual calculated date and time)
+- ❌ Don't omit the time component - always include both date and time
+
+## Verification Checklist (FOR AI)
+
+**⚠️ MANDATORY: Complete this checklist BEFORE creating any markdown file:**
+
+**PRE-FLIGHT:**
+- [ ] **READ** this entire rule before proceeding
+- [ ] **ACKNOWLEDGED** that this is a mandatory workflow, not optional
+
+**EXECUTION:**
+- [ ] **EXECUTED** terminal command to calculate date and time: `node -e "const d = new Date(); const date = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }); console.log(date + ' at ' + time)"`
+- [ ] **CAPTURED** the output from the date and time command (e.g., "[Month DD, YYYY at HH:MM AM/PM]")
+- [ ] **EXECUTED** terminal command to get GitHub username: `gh api user --jq .login`
+- [ ] **CAPTURED** the output from the username command (or noted if unavailable)
+- [ ] **VERIFIED** the calculated date and time format is "Month DD, YYYY at HH:MM AM/PM" (e.g., "[Month DD, YYYY at HH:MM AM/PM]")
+- [ ] **CONFIRMED** date and time are from command output (NOT hardcoded, NOT placeholder, NOT guessed)
+
+**FILE CREATION:**
+- [ ] **INCLUDED** `**Creation Date:**` field with date and time from command output
+- [ ] **INCLUDED** `**Updated Date:**` field with date and time from command output
+- [ ] **INCLUDED** `**Github username:**` field (with username from command, or blank if unavailable)
+- [ ] **VERIFIED** all three required header fields are at the top of the file
+- [ ] **VERIFIED** date and time format uses full month name, numeric day, numeric year, and 12-hour time with AM/PM
+- [ ] **VERIFIED** no placeholder dates or times were used
+
+**FINAL CHECK:**
+- [ ] **REVIEWED** the file header matches the template exactly
+- [ ] **CONFIRMED** all fields are present and correctly formatted
+
+**If ANY checkbox is unchecked, DO NOT create the file until ALL are complete.**
+
+**Common Mistakes to Avoid:**
+- ❌ Using placeholder dates or times like "[Month DD, YYYY at HH:MM AM/PM]" without calculating
+- ❌ Omitting the `**Github username:**` field
+- ❌ Creating the file before executing the terminal commands
+- ❌ Using hardcoded dates or times instead of command output
+- ❌ Omitting the time component from the date fields
+
+## Utility Scripts Reference
+
+### `scripts/utils/create-doc.sh`
+
+Creates a new markdown file from template with current date inserted.
+
+**Usage:**
+
+```bash
+./scripts/utils/create-doc.sh docs/deployment/my-new-doc.md
+```
+
+### `scripts/utils/update-markdown-dates.sh`
+
+Updates dates in existing markdown files.
+
+**Usage:**
+
+```bash
+# Update all files
+./scripts/utils/update-markdown-dates.sh
+
+# Update specific directory
+./scripts/utils/update-markdown-dates.sh docs/deployment/
+
+# Update specific file
+./scripts/utils/update-markdown-dates.sh docs/deployment/my-doc.md
+```
+
+### `scripts/utils/get-current-date.js`
+
+Gets the current date in various formats.
+
+**Usage:**
+
+```bash
+# Month YYYY format (default)
+node scripts/utils/get-current-date.js
+# Output: "[Month YYYY]"
+
+# Full date format
+node scripts/utils/get-current-date.js full
+# Output: "[Month DD, YYYY]"
+
+# ISO format
+node scripts/utils/get-current-date.js iso
+# Output: "[YYYY-MM-DD]"
+```
+
+### `scripts/utils/get-github-username.sh` and `scripts/utils/get-github-username.js`
+
+Gets the GitHub username using GitHub CLI.
+
+**Usage:**
+
+```bash
+# Shell script
+./scripts/utils/get-github-username.sh
+
+# Node.js script
+node scripts/utils/get-github-username.js
+```
+
+**Both scripts will:**
+
+- Check if `gh` CLI is installed
+- Check if user is logged in
+- Provide helpful error messages with installation/login instructions if not available
+- Return the GitHub username if available
+- Exit with error code if GitHub CLI is not available or user is not logged in
+
+## Examples
+
+### ✅ GOOD: Correct Template Structure
+
+```markdown
+# Background Worker Improvements
+
+**Creation Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Updated Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Github username:**
+
+---
+
+## Overview
+
+[Content here]
+```
+
+**Note:** Dates and times are calculated using JavaScript from the current date and time.
+
+### ❌ BAD: Missing Required Fields
+
+```markdown
+# Background Worker Improvements
+
+**Date:** January 2025
+**Status:** ✅ Complete
+```
+
+**Problems:**
+
+- Missing `**Creation Date:**` field
+- Missing `**Updated Date:**` field
+- Missing `**Github username:**` field
+- Wrong date format (should be "Month DD, YYYY at HH:MM AM/PM" not "Month YYYY")
+
+### ❌ BAD: Wrong Date and Time Format
+
+```markdown
+# Background Worker Improvements
+
+**Creation Date:** Jan 15, 2025 at 2:30 PM
+**Updated Date:** 01/15/2025 at 14:30
+**Github username:**
+
+---
+```
+
+**Problems:**
+
+- Abbreviated month name (should be "January" not "Jan")
+- Numeric date format (should be "January 15, 2025" not "01/15/2025")
+- 24-hour time format (should be "2:30 PM" not "14:30")
+
+### ✅ GOOD: Updated File
+
+```markdown
+# Background Worker Improvements
+
+**Creation Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Updated Date:** [Month DD, YYYY at HH:MM AM/PM]
+**Github username:**
+
+---
+
+## Overview
+
+[Updated content here]
+```
+
+**Note:** `**Updated Date:**` was updated when the file was modified.
+
+### ✅ GOOD: Using Template Script
+
+```bash
+# Script automatically inserts current date
+./scripts/utils/create-doc.sh docs/deployment/new-feature.md
+```
+
+## Integration with Documentation Organization
+
+This rule works in conjunction with:
+
+- `.cursor/rules/docs-organization.mdc` - File organization standards
+- `.cursor/rules/file-organization.mdc` - General file organization
+
+**🚨 CRITICAL REMINDERS**:
+
+1. **EXECUTE TERMINAL COMMANDS FIRST** - Run `node -e "..."` and `gh api user --jq .login` BEFORE creating the file
+2. **USE COMMAND OUTPUT** - Use the actual output from commands, NOT placeholder dates or times
+3. **ALL THREE FIELDS REQUIRED** - `**Creation Date:**`, `**Updated Date:**`, `**Github username:**` must all be present
+4. **DATE AND TIME FORMAT** - Must be "Month DD, YYYY at HH:MM AM/PM" (e.g., "[Month DD, YYYY at HH:MM AM/PM]")
+5. **NEVER USE PLACEHOLDERS** - Never use hardcoded dates or times like "[Month DD, YYYY at HH:MM AM/PM]" - always calculate
+6. **IF GITHUB CLI UNAVAILABLE** - Still include `**Github username:**` field, just leave it blank
+7. **AUTO-UPDATE** `**Updated Date:**` whenever modifying an existing markdown file
+8. **LEAVE EXISTING FILES AS-IS** - Only apply this rule to newly created files
+9. **CHECK THIS RULE** - Read this rule every time you create a new `.md` file anywhere in the repository
+10. **INCLUDE TIME** - Always include both date and time components, never omit the time
+
+**This rule applies to ALL markdown file creation across the entire repository, not just `docs/`!**
+
+**If you previously missed this rule, see `platform-docs/development/ai-workflow-improvements.md` for analysis of why and how to prevent it.**
+
+## JavaScript Date and Time Calculation (For AI Reference)
+
+**When creating or updating markdown files, use this JavaScript code:**
+
+```javascript
+// Calculate current date and time in required format
+const getCurrentDateTime = () => {
+  const date = new Date();
+  const dateStr = date.toLocaleDateString("en-US", {
+    month: "long", // Full month name: January, February, etc.
+    day: "numeric", // Day as number: 1, 2, 3, etc.
+    year: "numeric", // Full year: 2025, 2024, etc.
+  });
+  const timeStr = date.toLocaleTimeString("en-US", {
+    hour: "numeric", // Hour as number: 1, 2, 3, etc.
+    minute: "2-digit", // Minute as 2-digit: 01, 02, 03, etc.
+    hour12: true, // Use 12-hour format with AM/PM
+  });
+  return `${dateStr} at ${timeStr}`;
+};
+
+// Use the result in markdown files
+const currentDateTime = getCurrentDateTime();
+// Example output: "[Month DD, YYYY at HH:MM AM/PM]"
+```
+
+**Then use `currentDateTime` in the markdown template:**
+
+```markdown
+**Creation Date:** ${currentDateTime}
+**Updated Date:** ${currentDateTime}
+```
+
+## GitHub Username Retrieval (For AI Reference)
+
+**When creating markdown files, try to get GitHub username:**
+
+```bash
+# Try to get GitHub username using GitHub CLI
+gh api user --jq .login
+```
+
+**If GitHub CLI is not installed:**
+
+- Inform user: "GitHub CLI (gh) is not installed. Please install it: `brew install gh` (macOS) or see https://cli.github.com for other platforms. After installing, run `gh auth login` and then continue."
+- Leave `**Github username:**` field blank
+
+**If user is not logged in:**
+
+- Inform user: "You're not logged in to GitHub CLI. Please run `gh auth login` and then continue."
+- Leave `**Github username:**` field blank
+
+**If username is successfully retrieved:**
+
+- Use it in `**Github username:**` field
+- Format: Plain username (e.g., "adriaanbalt", not "@adriaanbalt")
+
+**Helper scripts available:**
+
+- `./scripts/utils/get-github-username.sh` (shell script)
+- `node scripts/utils/get-github-username.js` (Node.js script)
+
+Both scripts handle error cases and provide helpful messages.

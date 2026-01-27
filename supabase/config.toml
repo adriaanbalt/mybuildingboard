@@ -1,10 +1,6 @@
 # Supabase Configuration
 # This file configures the local Supabase instance
 
-[project]
-name = "my-building-board"
-id = "local"
-
 [api]
 enabled = true
 port = 54321

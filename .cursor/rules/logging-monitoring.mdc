@@ -1,0 +1,115 @@
+---
+description: Standards for logging and monitoring. Covers structured logging, log levels, and performance monitoring.
+globs: "app/api/**/*.ts,lib/**/*.ts"
+alwaysApply: false
+---
+
+# Logging & Monitoring Standards
+
+## Structured Logging
+
+### 1. Use createLogger
+
+**ALWAYS** use `createLogger` for logging:
+```typescript
+import { createLogger } from '@/lib/api/logger';
+
+const logger = createLogger('ComponentName');
+
+logger.info('Operation started', { userId, operation: 'fetch' });
+logger.error('Operation failed', { error, context });
+```
+
+### 2. Log Levels
+
+**Use appropriate log levels**:
+```typescript
+logger.debug('Debug information', { data });
+logger.info('Operation completed', { result });
+logger.warn('Warning condition', { warning });
+logger.error('Error occurred', { error });
+```
+
+### 3. Structured Context
+
+**Include structured context**:
+```typescript
+logger.info('User action', {
+  userId: user.id,
+  action: 'create_bucket',
+  bucketId: bucket.id,
+  timestamp: new Date().toISOString()
+});
+```
+
+## Never Log Sensitive Data
+
+### 1. Avoid Logging Secrets
+
+**NEVER** log sensitive information:
+```typescript
+// ❌ Bad
+logger.info('Login', { password, token });
+
+// ✅ Good
+logger.info('Login', { userId: user.id });
+```
+
+## Performance Monitoring
+
+### 1. Monitor API Operations
+
+**Monitor API operations**:
+```typescript
+import { monitorApiOperation } from '@/lib/api/monitoring';
+
+const result = await monitorApiOperation('fetch_data', async () => {
+  return await fetchData();
+});
+```
+
+### 2. Monitor Database Operations
+
+**Monitor database operations**:
+```typescript
+import { monitorDbOperation } from '@/lib/api/monitoring';
+
+const result = await monitorDbOperation('query_buckets', async () => {
+  return await supabase.from('buckets').select('*');
+});
+```
+
+## Error Tracking
+
+### 1. Record Errors
+
+**Track errors for monitoring**:
+```typescript
+import { recordError } from '@/lib/api/monitoring';
+
+try {
+  // Operation
+} catch (error) {
+  recordError('operation_name', error, {
+    userId: user?.id,
+    context: 'additional context'
+  });
+  throw error;
+}
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Use structured logging
+- ✅ Include context in logs
+- ✅ Use appropriate log levels
+- ✅ Monitor performance
+- ✅ Track errors
+
+### DON'T:
+- ❌ Log sensitive data
+- ❌ Use console.log in production
+- ❌ Skip error tracking
+- ❌ Log without context
+- ❌ Skip performance monitoring

@@ -1,0 +1,180 @@
+---
+description: Surgical fix methodology - fix bugs with minimal, targeted changes. Diagnose first, fix second.
+globs: [
+  "mobile-app/**/*.{ts,tsx,js,jsx}",
+  "backend/src/**/*.{ts,js}",
+  "website/src/**/*.{ts,tsx,js,jsx}",
+  "mobile-app/tests/**/*.{ts,tsx,js,jsx}",
+  "backend/**/*.test.{ts,js}"
+]
+alwaysApply: false
+---
+
+# Surgical Fix Methodology
+
+## Core Principle
+
+**Diagnose first, fix second. One problem at a time with minimal changes.**
+
+## Pre-Fix Checklist
+
+Before making any code changes to fix a bug, you MUST:
+
+1. ✅ **Identify exact failure point** - Use targeted logging to confirm where it breaks
+2. ✅ **Confirm root cause** - Not just symptoms, but the actual cause
+3. ✅ **Identify minimal change** - What's the smallest fix that solves it?
+4. ✅ **No unrelated changes** - Don't fix other issues "while we're at it"
+
+## The Three-Phase Approach
+
+### Phase 1: Diagnose (Before Fix)
+
+**Add ONE critical log at the suspected failure point:**
+
+```typescript
+// 🔴 CRITICAL: Single diagnostic log
+console.log('🔴 [CRITICAL] [ComponentName] Failure point check', {
+  keyVariable: value,
+  expectedValue: expected,
+});
+```
+
+**Then:**
+- Run test to see if log appears
+- Identify exact break point
+- Confirm root cause with evidence
+
+### Phase 2: Fix (Minimal Change)
+
+**Fix ONLY the specific problem:**
+
+- ✅ Change only the failure point
+- ✅ Add minimal diagnostic code if needed
+- ❌ Don't refactor unrelated code
+- ❌ Don't add "defensive" code for other issues
+- ❌ Don't optimize or improve unrelated code
+
+### Phase 3: Verify & Clean (After Fix)
+
+**Verify fix works, then clean up:**
+
+1. Test the fix works
+2. Remove temporary diagnostic code
+3. Document what was fixed and why
+
+## Anti-Patterns to Avoid
+
+### ❌ DON'T: Add logging everywhere
+
+```typescript
+// BAD: Logging everywhere without knowing the problem
+console.log('Step 1');
+console.log('Step 2');
+console.log('Step 3');
+// ... 20 more logs
+```
+
+**Instead:** Add ONE log at the suspected failure point first.
+
+### ❌ DON'T: Fix multiple potential issues
+
+```typescript
+// BAD: Fixing 20 potential problems
+if (condition1) { /* fix 1 */ }
+if (condition2) { /* fix 2 */ }
+if (condition3) { /* fix 3 */ }
+// ... 17 more fixes
+```
+
+**Instead:** Fix the ONE actual problem confirmed by diagnosis.
+
+### ❌ DON'T: Refactor while fixing
+
+```typescript
+// BAD: Fixing bug + refactoring unrelated code
+function fixBug() {
+  // Fix the bug
+  const result = processData(data);
+  
+  // Refactoring unrelated code "while we're at it"
+  const optimized = optimizeUnrelatedFunction();
+  const cleaned = cleanOtherCode();
+}
+```
+
+**Instead:** Fix the bug only. Refactor separately if needed.
+
+### ❌ DON'T: Add defensive code for non-existent problems
+
+```typescript
+// BAD: Adding checks for problems that don't exist
+if (data && data.items && data.items.length > 0 && data.items[0]) {
+  // Fix actual bug
+}
+```
+
+**Instead:** Only add checks if the problem actually exists.
+
+## Example: Surgical Fix Flow
+
+### Problem: Recipes not appearing after onboarding
+
+**Phase 1: Diagnose**
+```typescript
+// Add ONE critical log
+console.log('🔴 [CRITICAL] handleMealPlanSuccess CALLBACK INVOKED', {
+  resultCount: mealTypeResults.length,
+});
+```
+
+**Result:** Log doesn't appear → Callback not being called → Root cause identified
+
+**Phase 2: Fix**
+```typescript
+// Fix ONLY the callback invocation issue
+if (onSuccess) {
+  onSuccess(results); // Fix: Ensure callback is called
+}
+```
+
+**Phase 3: Verify & Clean**
+```typescript
+// Remove diagnostic log after confirming fix works
+// (Keep only if needed for production debugging)
+```
+
+## When to Apply This Rule
+
+✅ **Apply when:**
+- Fixing bugs or errors
+- Debugging issues
+- Resolving failures
+- Addressing user-reported problems
+
+❌ **Don't apply when:**
+- Implementing new features
+- Writing new code from scratch
+- Refactoring for performance (unless fixing a bug)
+- Updating documentation
+
+## Success Criteria
+
+A surgical fix is successful when:
+
+1. ✅ Exact failure point was identified with evidence
+2. ✅ Minimal code change fixed the problem
+3. ✅ No unrelated code was modified
+4. ✅ Fix was verified to work
+5. ✅ Temporary diagnostic code was removed
+
+## Related Rules
+
+- `.cursor/rules/engineer.mdc` - Principal engineer mindset
+- `.cursor/rules/graceful-degradation-patterns.mdc` - Error handling patterns
+- `.cursor/rules/meal-plan-standards.mdc` - Meal plan code standards
+
+---
+
+**Last Updated:** January 15, 2025  
+**Status:** Active  
+**Priority:** High

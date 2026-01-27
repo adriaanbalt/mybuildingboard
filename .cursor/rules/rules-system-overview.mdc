@@ -1,0 +1,185 @@
+---
+description: Overview of the Cursor rules system and how to use it effectively.
+alwaysApply: false
+---
+
+# Cursor Rules System
+
+This directory contains **generic rules** that apply to all applications in the workspace. These rules cover platform-wide patterns, standards, and best practices.
+
+## Directory Structure
+
+Rules are organized by scope:
+
+- **Workspace Root** (`.cursor/rules/`) - Generic rules that apply to all apps
+- **Feedric** (`Feedric/.cursor/rules/`) - Feedric-specific rules (business logic, domain models, integrations)
+- **Markense** (`Markense/.cursor/rules/`) - Markense-specific rules (if any)
+
+## How Cursor Reads Rules
+
+Cursor automatically reads rules from the **closest** `.cursor/rules/` directory:
+
+1. When editing files in `Feedric/`, Cursor reads from `Feedric/.cursor/rules/` first, then falls back to workspace root
+2. When editing files in `Markense/`, Cursor reads from `Markense/.cursor/rules/` first, then falls back to workspace root
+3. When editing files at workspace root, Cursor reads from workspace root `.cursor/rules/`
+
+**No configuration needed** - Cursor handles this automatically based on file location.
+
+## Rule File Structure
+
+Each rule file follows this format:
+```markdown
+---
+description: Brief description of what this rule covers
+globs: "**/*.ts,**/*.tsx"  # File patterns this rule applies to
+alwaysApply: true/false     # Whether to always apply or only when files match
+---
+
+# Rule Content
+```
+
+## Rule Categories
+
+### Generic Rules (Workspace Root)
+
+These rules apply to all applications in the workspace:
+
+#### Always Applied Rules
+- `file-organization.mdc` - File and folder organization standards
+- `docs-organization.mdc` - Documentation organization standards for `/docs` folder
+- `folder-restructuring.mdc` - Folder restructuring and file move standards (prevents code loss during refactoring)
+- `design-system-tokens.mdc` - Design system token standards (enforces CSS variables and semantic tokens)
+- `objective-reasoning.mdc` - Hyper-objective logic engine
+- `balanced-evaluation.mdc` - Balanced evaluation standards
+- `nodummy.mdc` - Production code quality standards
+
+### Context-Specific Rules
+These rules apply when working with matching file patterns:
+
+#### API & Backend
+- `api-routes.mdc` - Next.js API route handlers (`app/api/**/*.ts`)
+- `database-queries.mdc` - Supabase database queries (`lib/database/**/*.ts`)
+- `security.mdc` - Security standards (`app/api/**/*.ts`, `lib/auth/**/*.ts`)
+- `error-handling.mdc` - Error handling patterns (`**/*.{ts,tsx}`)
+- `logging-monitoring.mdc` - Logging and monitoring (`app/api/**/*.ts`, `lib/**/*.ts`)
+
+#### Frontend
+- `react-components.mdc` - React component standards (`app/**/*.tsx`, `lib/ui/**/*.tsx`, `app/**/_components/**/*.tsx`)
+- `component-styling-patterns.mdc` - Component styling patterns and best practices (`app/**/*.tsx`, `lib/ui/**/*.tsx`, `app/**/_components/**/*.tsx`)
+- `hooks.mdc` - Custom React hooks (`lib/hooks/**/*.ts`)
+- `typescript-types.mdc` - TypeScript type definitions (`lib/types/**/*.ts`)
+- `design-system-tokens.mdc` - Design system token standards (CSS variables, semantic tokens, theme switching)
+- `themes.mdc` - Theme management standards (Design System Themes and Feedback Themes) (`**/themes/**/*.{ts,tsx}`, `**/Theme*.{ts,tsx}`, `app/api/**/themes/**/*.ts`)
+
+#### Infrastructure & Configuration
+- `environment-variables.mdc` - Environment variable standards (`**/*.{ts,tsx,js,json}`)
+- `https-configuration.mdc` - HTTPS setup for local development
+- `oauth-strategy.mdc` - OAuth flow implementation
+- `slack.mdc` - Slack integration patterns
+- `supabase-migrations.mdc` - Supabase migration standards (`supabase/migrations/**/*.sql`, `infrastructure/supabase/migrations/**/*.sql`, `app/api/**/*.ts`, `lib/database/**/*.ts`)
+
+#### Development
+- `testing.mdc` - Testing standards (`tests/**/*.{ts,tsx}`, `services/**/tests/**/*.py`)
+- `performance.mdc` - Performance optimization (`**/*.{ts,tsx}`)
+- `markdown-creation.mdc` - Markdown file creation with date handling (`docs/**/*.md`)
+
+## How Rules Work
+
+1. **Glob Patterns**: Rules use glob patterns to target specific files
+   - `app/api/**/*.ts` - All TypeScript files in API routes
+   - `lib/hooks/**/*.ts` - All hook files
+   - `**/*.{ts,tsx}` - All TypeScript files
+
+2. **Always Apply**: Some rules are always active (e.g., project overview, file organization)
+
+3. **Context Matching**: Rules activate when you're working with files matching their glob patterns
+
+## Best Practices
+
+1. **Follow the patterns** defined in each rule file
+2. **Check relevant rules** before creating new code
+3. **Update rules** when patterns change
+4. **Add new rules** for new patterns or domains
+
+## Rule Maintenance
+
+- Keep rules up-to-date with codebase changes
+- Add examples from actual codebase
+- Remove outdated patterns
+- Consolidate similar rules when appropriate
+
+## Quick Reference
+
+| Rule | Applies To | Purpose |
+|------|------------|---------|
+| `api-routes.mdc` | API routes | Route handler patterns, auth, errors |
+| `react-components.mdc` | React components | Component structure, hooks, patterns |
+| `component-styling-patterns.mdc` | React components | Styling patterns, design tokens, component classes |
+| `hooks.mdc` | Custom hooks | Hook patterns, data fetching |
+| `database-queries.mdc` | Database code | Supabase query patterns |
+| `supabase-migrations.mdc` | Migrations, API, DB code | Migration workflow, verification, reset detection |
+| `error-handling.mdc` | All code | Error handling standards |
+| `security.mdc` | API/auth code | Security best practices |
+| `typescript-types.mdc` | Type definitions | Type organization and patterns |
+| `themes.mdc` | Theme files | Design System Themes and Feedback Themes management |
+| `file-organization.mdc` | All files | File structure and naming |
+| `docs-organization.mdc` | Documentation (`docs/**/*.md`) | Markdown file organization by subject |
+| `markdown-creation.mdc` | Documentation (`docs/**/*.md`) | Markdown file creation with proper date handling |
+| `folder-restructuring.mdc` | All files | Folder restructuring standards, prevents code loss during moves |
+| `deploy-to-production-script.mdc` | Deployment scripts | Production deployment workflow and CI integration |
+
+## Adding New Rules
+
+### Generic Rules (Workspace Root)
+
+When adding a generic rule that applies to all apps:
+1. Create `.mdc` file in `.cursor/rules/` (workspace root)
+2. Add frontmatter with description, globs, and alwaysApply
+3. Use relative paths in globs (e.g., `app/**/*.tsx`, `lib/**/*.ts`)
+4. Document patterns with examples
+5. Include DO's and DON'Ts
+6. Update this README
+
+### App-Specific Rules
+
+When adding an app-specific rule:
+1. Create `.mdc` file in `{App}/.cursor/rules/` (e.g., `Feedric/.cursor/rules/`)
+2. Add frontmatter with description, globs, and alwaysApply
+3. Use relative paths in globs (no app prefix needed - Cursor handles scoping automatically)
+4. Document patterns with examples
+5. Include DO's and DON'Ts
+6. Update the app-specific README
+
+## Rule Scoping
+
+**Generic rules** (workspace root) should:
+- Apply to all Next.js/React/Supabase apps
+- Cover platform-wide patterns
+- Not reference app-specific business logic
+
+**App-specific rules** (e.g., `Feedric/.cursor/rules/`) should:
+- Cover app-specific business logic
+- Reference app-specific data structures
+- Document app-specific workflows
+
+## Examples
+
+**Generic Rule** (workspace root):
+```markdown
+---
+description: React component standards
+globs: "**/app/**/*.tsx,**/lib/ui/**/*.tsx"
+alwaysApply: false
+---
+```
+
+**Feedric-Specific Rule** (`Feedric/.cursor/rules/`):
+```markdown
+---
+description: Feedric bucket creation flow
+globs: "app/**/*.tsx,app/api/**/*.ts"
+alwaysApply: false
+---
+```
+
+Note: Globs use relative paths - Cursor automatically scopes them to the app directory.

@@ -72,17 +72,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!session) return;
 
     const refreshInterval = setInterval(async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      // Verify user is still authenticated
+      const { data: { user } } = await supabase.auth.getUser();
       
-      if (currentSession) {
-        // Check if session expires in less than 5 minutes
-        const expiresAt = currentSession.expires_at;
-        if (expiresAt) {
-          const expiresIn = expiresAt * 1000 - Date.now();
-          if (expiresIn < 5 * 60 * 1000) {
-            // Refresh session
-            await supabase.auth.refreshSession();
-            logger.debug('Session refreshed automatically');
+      if (user) {
+        // Get session to check expiry
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        if (currentSession) {
+          // Check if session expires in less than 5 minutes
+          const expiresAt = currentSession.expires_at;
+          if (expiresAt) {
+            const expiresIn = expiresAt * 1000 - Date.now();
+            if (expiresIn < 5 * 60 * 1000) {
+              // Refresh session
+              await supabase.auth.refreshSession();
+              logger.debug('Session refreshed automatically');
+            }
           }
         }
       }

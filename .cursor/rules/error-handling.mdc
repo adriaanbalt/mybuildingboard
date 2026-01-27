@@ -1,0 +1,433 @@
+---
+description: Standards for error handling across the application. Covers API errors, client errors, database errors, and user-facing error messages.
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Error Handling Standards
+
+## Error Handling Functions
+
+### 1. API Route Errors
+
+**ALWAYS** use `handleApiError()` for API routes:
+```typescript
+import { handleApiError } from '@/lib/api/errors';
+
+export async function POST(request: NextRequest) {
+  try {
+    // Operation
+  } catch (error) {
+    const { status, response } = handleApiError(error, {
+      logError: true,
+      showToUser: true,
+      retryable: false,
+      context: {
+        endpoint: '/api/example',
+        userId: user?.id
+      }
+    });
+    
+    return NextResponse.json(response, { status });
+  }
+}
+```
+
+### 2. Client-Side Errors
+
+**Use `handleClientError()` for client operations**:
+```typescript
+import { handleClientError } from '@/lib/api/errors';
+
+try {
+  const response = await fetch('/api/example');
+  const data = await response.json();
+} catch (error) {
+  const { shouldRetry, userMessage, shouldLogout } = handleClientError(error, {
+    showToUser: true,
+    context: { operation: 'fetch data' }
+  });
+  
+  if (shouldLogout) {
+    // Redirect to login
+  }
+  
+  setError(userMessage);
+}
+```
+
+### 3. Database Errors
+
+**Use `handleDatabaseError()` for database operations**:
+```typescript
+import { handleDatabaseError } from '@/lib/api/errors';
+
+const { data, error } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', bucketId);
+
+if (error) {
+  const { shouldRetry, userMessage, isConstraintError } = handleDatabaseError(
+    error,
+    'fetch bucket',
+    { bucketId }
+  );
+  
+  if (isConstraintError) {
+    // Handle constraint violation
+  }
+  
+  throw new Error(userMessage);
+}
+```
+
+### 4. Network Errors
+
+**Use `handleNetworkError()` for network operations**:
+```typescript
+import { handleNetworkError } from '@/lib/api/errors';
+
+try {
+  const response = await fetch(url);
+} catch (error) {
+  const { shouldRetry, userMessage, isTimeout } = handleNetworkError(
+    error,
+    url,
+    { operation: 'fetch' }
+  );
+  
+  if (shouldRetry && !isTimeout) {
+    // Retry logic
+  }
+  
+  setError(userMessage);
+}
+```
+
+## Error Logging
+
+### 1. Structured Logging
+
+**ALWAYS** use structured logging with context:
+```typescript
+import { createLogger } from '@/lib/api/logger';
+
+const logger = createLogger('ComponentName');
+
+try {
+  // Operation
+} catch (error) {
+  logger.error('Operation failed', {
+    error: error instanceof Error ? error.message : 'Unknown error',
+    context: {
+      userId: user?.id,
+      operation: 'fetch data',
+      timestamp: new Date().toISOString()
+    }
+  });
+}
+```
+
+### 2. Log Levels
+
+**Use appropriate log levels**:
+```typescript
+logger.debug('Debug information', { data });
+logger.info('Operation completed', { result });
+logger.warn('Warning condition', { warning });
+logger.error('Error occurred', { error });
+```
+
+### 3. Never Log Sensitive Data
+
+**NEVER** log sensitive information:
+```typescript
+// ❌ Bad
+logger.error('Login failed', { password, token });
+
+// ✅ Good
+logger.error('Login failed', { 
+  userId: user?.id,
+  email: user?.email // Only if necessary
+});
+```
+
+## User-Facing Error Messages
+
+### 1. Friendly Messages
+
+**ALWAYS** provide user-friendly error messages:
+```typescript
+// ❌ Bad
+throw new Error('PGRST116: No rows returned');
+
+// ✅ Good
+throw new Error('Bucket not found. Please check the ID and try again.');
+```
+
+### 2. Contextual Messages
+
+**Provide contextual error messages**:
+```typescript
+if (response.status === 401) {
+  setError('Your session has expired. Please log in again.');
+} else if (response.status === 403) {
+  setError('You do not have permission to perform this action.');
+} else if (response.status === 404) {
+  setError('The requested resource was not found.');
+} else if (response.status === 429) {
+  setError('Too many requests. Please wait a moment and try again.');
+} else {
+  setError('An unexpected error occurred. Please try again.');
+}
+```
+
+### 3. Actionable Messages
+
+**Provide actionable error messages**:
+```typescript
+// ❌ Bad
+setError('Validation failed');
+
+// ✅ Good
+setError('Please provide a valid email address and password.');
+```
+
+## Error Recovery
+
+### 1. Retry Logic
+
+**Implement retry with exponential backoff**:
+```typescript
+import { retryOperation } from '@/lib/api/errors';
+
+const result = await retryOperation(
+  async () => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Request failed');
+    return response.json();
+  },
+  3, // max retries
+  1000, // base delay (ms)
+  { operation: 'fetch data' }
+);
+```
+
+### 2. Error Boundaries
+
+**Use Error Boundaries for React components**:
+```typescript
+import { ErrorBoundary } from 'react-error-boundary';
+
+function ErrorFallback({ error, resetErrorBoundary }: ErrorFallbackProps) {
+  return (
+    <div className="p-4 border border-red-200 rounded-lg">
+      <h2>Something went wrong</h2>
+      <p>{error.message}</p>
+      <button onClick={resetErrorBoundary}>Try again</button>
+    </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ErrorBoundary FallbackComponent={ErrorFallback}>
+      <PageContent />
+    </ErrorBoundary>
+  );
+}
+```
+
+## Error Types
+
+### 1. Authentication Errors
+
+**Handle authentication errors**:
+```typescript
+if (response.status === 401) {
+  // Don't redirect here - ProtectedRoute handles it
+  setError('Authentication required. Please log in again.');
+  return;
+}
+```
+
+### 2. Authorization Errors
+
+**Handle authorization errors**:
+```typescript
+if (response.status === 403) {
+  setError('You do not have permission to access this resource.');
+  return;
+}
+```
+
+### 3. Validation Errors
+
+**Handle validation errors**:
+```typescript
+if (response.status === 400) {
+  const { errors } = await response.json();
+  setValidationErrors(errors);
+  return;
+}
+```
+
+### 4. Not Found Errors
+
+**Handle not found errors**:
+```typescript
+if (response.status === 404) {
+  setError('The requested resource was not found.');
+  return;
+}
+```
+
+### 5. Rate Limit Errors
+
+**Handle rate limit errors**:
+```typescript
+if (response.status === 429) {
+  const retryAfter = response.headers.get('Retry-After');
+  setError(`Too many requests. Please wait ${retryAfter} seconds.`);
+  return;
+}
+```
+
+### 6. Server Errors
+
+**Handle server errors**:
+```typescript
+if (response.status >= 500) {
+  setError('A server error occurred. Please try again later.');
+  // Log for monitoring
+  logger.error('Server error', { status: response.status });
+  return;
+}
+```
+
+## Database Error Handling
+
+### 1. Common Database Errors
+
+**Handle common database error codes**:
+```typescript
+if (error) {
+  switch (error.code) {
+    case 'PGRST116':
+      // No rows returned
+      return null;
+    case '23505':
+      // Unique constraint violation
+      throw new Error('A record with this information already exists.');
+    case '23503':
+      // Foreign key violation
+      throw new Error('Cannot delete this record because it is referenced by other records.');
+    case '42P01':
+      // Table does not exist
+      logger.error('Database table not found', { error });
+      throw new Error('Database configuration error. Please contact support.');
+    default:
+      logger.error('Database error', { error });
+      throw new Error('Database operation failed. Please try again.');
+  }
+}
+```
+
+## Error Propagation
+
+### 1. API Routes
+
+**Propagate errors properly in API routes**:
+```typescript
+export async function POST(request: NextRequest) {
+  try {
+    // Operation that may throw
+    const result = await riskyOperation();
+    return NextResponse.json({ data: result });
+  } catch (error) {
+    // Handle and return error response
+    const { status, response } = handleApiError(error);
+    return NextResponse.json(response, { status });
+  }
+}
+```
+
+### 2. Client Components
+
+**Handle errors in client components**:
+```typescript
+function Component() {
+  const [error, setError] = useState<string | null>(null);
+  
+  const handleAction = async () => {
+    try {
+      setError(null);
+      await performAction();
+    } catch (err) {
+      const { userMessage } = handleClientError(err);
+      setError(userMessage);
+    }
+  };
+  
+  return (
+    <div>
+      {error && <div className="error">{error}</div>}
+      {/* Component content */}
+    </div>
+  );
+}
+```
+
+## Error Monitoring
+
+### 1. Track Errors
+
+**Monitor errors for production**:
+```typescript
+import { recordError } from '@/lib/api/monitoring';
+
+try {
+  // Operation
+} catch (error) {
+  recordError('operation_name', error, {
+    userId: user?.id,
+    context: 'additional context'
+  });
+  throw error;
+}
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Use standardized error handling functions
+- ✅ Log errors with full context
+- ✅ Provide user-friendly error messages
+- ✅ Handle all error cases
+- ✅ Implement retry logic for transient errors
+- ✅ Use Error Boundaries for React components
+- ✅ Validate input before operations
+- ✅ Monitor errors in production
+
+### DON'T:
+- ❌ Expose internal error details to users
+- ❌ Log sensitive information
+- ❌ Skip error handling
+- ❌ Use generic error messages
+- ❌ Throw errors without context
+- ❌ Ignore error codes
+- ❌ Skip error monitoring
+- ❌ Use console.log for production errors
+
+## Error Handling Checklist
+
+Before handling errors, ensure:
+- [ ] Appropriate error handling function used
+- [ ] Error logged with context
+- [ ] User-friendly error message provided
+- [ ] Error type identified and handled
+- [ ] Retry logic implemented (if applicable)
+- [ ] Error Boundary used (for React components)
+- [ ] Sensitive data not logged
+- [ ] Error monitoring configured

@@ -1,0 +1,455 @@
+---
+description: Standards for creating guide markdown files in docs/guides/ with proper frontmatter, date handling, and template structure. CHECK THIS RULE BEFORE CREATING ANY GUIDE MARKDOWN FILE.
+globs: "docs/guides/**/*.md"
+alwaysApply: true
+---
+
+# Guide Markdown File Creation Standards
+
+## 🚨 CRITICAL: READ THIS BEFORE CREATING ANY GUIDE MARKDOWN FILE
+
+**This rule applies to ALL markdown files in the `docs/guides/` folder.**
+
+**MANDATORY CHECKLIST - Complete before creating any guide `.md` file:**
+
+1. ✅ **Calculate current date** using JavaScript (see below)
+2. ✅ **Include YAML frontmatter** with required fields
+3. ✅ **Include markdown creation date fields** after frontmatter
+4. ✅ **Use calculated date** in both frontmatter `date` field and markdown date fields
+5. ✅ **Verify date format** is `Month DD, YYYY` for markdown fields and `YYYY-MM-DD` for frontmatter
+6. ✅ **Follow the template structure** exactly
+
+**If you're creating a new guide markdown file, STOP and calculate the current date first!**
+
+---
+
+## CRITICAL: Required Template Structure
+
+**ALL guide markdown files MUST follow this exact structure:**
+
+```markdown
+---
+title: Guide Title
+description: Guide description (optional but recommended)
+category: Category Name
+tags: [tag1, tag2, tag3]
+author: Author Name (optional)
+date: YYYY-MM-DD
+---
+
+# Guide Title
+
+**Creation Date:** [Full Month Name DD, YYYY]
+**Updated Date:** [Full Month Name DD, YYYY]
+
+---
+
+[Rest of guide content]
+```
+
+### Template Example
+
+```markdown
+---
+title: Getting Started with Feedric
+description: A comprehensive guide to help you get started with Feedric and make the most of its features.
+category: Getting Started
+tags: [basics, onboarding, setup]
+author: adriaanbalt
+date: 2025-01-15
+---
+
+# Getting Started with Feedric
+
+**Creation Date:** January 15, 2025
+**Updated Date:** January 15, 2025
+
+---
+
+## Introduction
+
+[Guide content here]
+```
+
+---
+
+## CRITICAL: Date Handling
+
+**ALWAYS use the current date when creating guide markdown files.** Never use placeholder dates.
+
+### How to Get the Current Date (JavaScript)
+
+**Before creating any guide markdown file, the AI MUST:**
+
+1. **Execute JavaScript to get the current date** using this code:
+
+   ```javascript
+   // Get current date in format: "Month DD, YYYY"
+   const now = new Date();
+   const markdownDate = now.toLocaleDateString("en-US", {
+     month: "long",
+     day: "numeric",
+     year: "numeric",
+   });
+   // Result: "January 15, 2025"
+
+   // Get current date in format: "YYYY-MM-DD" for frontmatter
+   const frontmatterDate = now.toISOString().split("T")[0];
+   // Result: "2025-01-15"
+   ```
+
+2. **Use both date formats**:
+   - `YYYY-MM-DD` format in YAML frontmatter `date` field
+   - `Month DD, YYYY` format in markdown `**Creation Date:**` and `**Updated Date:**` fields
+
+---
+
+## Required Fields
+
+### YAML Frontmatter (Required)
+
+**ALL guide files MUST include this YAML frontmatter:**
+
+```yaml
+---
+title: Guide Title                    # REQUIRED - Display title
+description: Guide description        # OPTIONAL - Short description for cards/list
+category: Category Name               # REQUIRED - For grouping guides
+tags: [tag1, tag2]                     # OPTIONAL - Array of tags for filtering
+author: GitHub Username                # OPTIONAL - Use GitHub username (preferred over generic team names)
+date: YYYY-MM-DD                      # REQUIRED - Publication date (ISO format)
+---
+```
+
+**Field Requirements:**
+- `title` - **REQUIRED** - The guide title (used in navigation and display)
+- `description` - **OPTIONAL** - Short description shown in guide cards/list
+- `category` - **REQUIRED** - Category for grouping (e.g., "Getting Started", "Advanced", "API")
+- `tags` - **OPTIONAL** - Array of tags for search/filtering (e.g., `[basics, setup, onboarding]`)
+- `author` - **OPTIONAL** - Author name (use GitHub username when available, to show proper authorship attribution)
+- `date` - **REQUIRED** - Publication date in `YYYY-MM-DD` format (ISO date)
+
+### Markdown Creation Fields (Required)
+
+**ALL guide files MUST include these fields after the frontmatter:**
+
+```markdown
+# Guide Title
+
+**Creation Date:** [Full Month Name DD, YYYY]
+**Updated Date:** [Full Month Name DD, YYYY]
+
+---
+```
+
+**Field Requirements:**
+- `**Creation Date:**` - **REQUIRED** - Full date when guide was created (Month DD, YYYY format)
+- `**Updated Date:**` - **REQUIRED** - Full date when guide was last updated (Month DD, YYYY format)
+- ~~`**Github username:**`~~ - **REMOVED** - No longer needed. Use `author` field in frontmatter instead (which displays above the guide)
+
+**Note:** The `# Guide Title` should match the `title` field in the frontmatter.
+
+---
+
+## Date Format Standards
+
+### YAML Frontmatter Date Format
+
+**Use ISO format (`YYYY-MM-DD`):**
+```yaml
+date: 2025-01-15
+```
+
+- ✅ Correct: `2025-01-15`
+- ✅ Correct: `2025-12-03`
+- ❌ Wrong: `01/15/2025` (numeric format)
+- ❌ Wrong: `January 15, 2025` (full format - use in markdown fields only)
+
+### Markdown Date Format
+
+**Use full format (`Month DD, YYYY`):**
+```markdown
+**Creation Date:** January 15, 2025
+**Updated Date:** January 15, 2025
+```
+
+- ✅ Correct: "January 15, 2025"
+- ✅ Correct: "December 3, 2024"
+- ❌ Wrong: "Jan 15, 2025" (abbreviated month)
+- ❌ Wrong: "01/15/2025" (numeric format)
+- ❌ Wrong: "2025-01-15" (ISO format - use in frontmatter only)
+
+---
+
+## File Creation Workflow (FOR AI)
+
+### ⚠️ MANDATORY: Before Creating Any Guide Markdown File
+
+**The AI MUST complete these steps:**
+
+1. **Calculate current date using JavaScript:**
+
+   ```javascript
+   // Get current date in both formats
+   const now = new Date();
+   
+   // For markdown fields: "Month DD, YYYY"
+   const markdownDate = now.toLocaleDateString("en-US", {
+     month: "long",
+     day: "numeric",
+     year: "numeric",
+   });
+   // Result: "January 15, 2025"
+   
+   // For frontmatter: "YYYY-MM-DD"
+   const frontmatterDate = now.toISOString().split("T")[0];
+   // Result: "2025-01-15"
+   ```
+
+2. **Create the file** with the required structure:
+
+   ```markdown
+   ---
+   title: [Guide Title]
+   description: [Optional description]
+   category: [Category Name]
+   tags: [tag1, tag2]
+   author: [GitHub username, or leave blank]
+   date: [frontmatterDate from step 1]
+   ---
+
+   # [Guide Title]
+
+   **Creation Date:** [markdownDate from step 1]
+   **Updated Date:** [markdownDate from step 1]
+
+   ---
+
+   [Guide content]
+   ```
+
+3. **Verify** both date formats are correct:
+   - Frontmatter: `YYYY-MM-DD` format
+   - Markdown fields: `Month DD, YYYY` format
+
+---
+
+## Updating Existing Guide Files
+
+### Auto-Update Updated Date
+
+**When modifying an existing guide markdown file, the AI MUST:**
+
+1. **Calculate current date** using JavaScript:
+
+   ```javascript
+   const now = new Date();
+   const markdownDate = now.toLocaleDateString("en-US", {
+     month: "long",
+     day: "numeric",
+     year: "numeric",
+   });
+   const frontmatterDate = now.toISOString().split("T")[0];
+   ```
+
+2. **Update both date fields**:
+   - Update `date` in YAML frontmatter to current date (`YYYY-MM-DD`)
+   - Update `**Updated Date:**` in markdown to current date (`Month DD, YYYY`)
+
+3. **Leave `**Creation Date:**` unchanged** (only update if it's missing)
+
+4. **Leave existing files as-is** if they don't have the template - only apply to newly created files
+
+---
+
+## Category Guidelines
+
+**Use consistent categories for grouping guides:**
+
+- `Getting Started` - Beginner guides, onboarding, setup
+- `Advanced` - Advanced features, complex workflows
+- `API` - API documentation, integration guides
+- `Troubleshooting` - Common issues, solutions, FAQs
+- `Best Practices` - Recommended approaches, tips
+- `Features` - Feature-specific guides
+
+**Create new categories as needed, but keep them consistent across guides.**
+
+---
+
+## Tag Guidelines
+
+**Use descriptive, searchable tags:**
+
+- Use lowercase
+- Use kebab-case for multi-word tags (e.g., `api-integration`, `slack-setup`)
+- Keep tags specific and relevant
+- Common tags: `basics`, `setup`, `onboarding`, `advanced`, `api`, `slack`, `teams`, `troubleshooting`
+
+**Examples:**
+```yaml
+tags: [basics, onboarding, setup]
+tags: [advanced, api, integration]
+tags: [slack, connectors, setup]
+```
+
+---
+
+## DO's and DON'Ts
+
+### DO:
+
+- ✅ **ALWAYS** calculate current date using JavaScript before creating guide files
+- ✅ **ALWAYS** include YAML frontmatter with required fields
+- ✅ **ALWAYS** include markdown creation date fields after frontmatter
+- ✅ Use `YYYY-MM-DD` format for frontmatter `date` field
+- ✅ Use `Month DD, YYYY` format for markdown date fields
+- ✅ Match the `# Guide Title` with the frontmatter `title` field
+- ✅ Use consistent categories across guides
+- ✅ Use descriptive, searchable tags
+- ✅ Auto-update both date fields when modifying guides
+
+### DON'T:
+
+- ❌ **NEVER** use placeholder dates - always calculate from current date
+- ❌ Don't skip YAML frontmatter
+- ❌ Don't skip markdown creation date fields
+- ❌ Don't mix date formats (use ISO in frontmatter, full format in markdown)
+- ❌ Don't use abbreviated month names in markdown fields
+- ❌ Don't forget to update both date fields when modifying
+- ❌ Don't create guides without categories
+- ❌ Don't use inconsistent category names
+
+---
+
+## Verification Checklist (FOR AI)
+
+**⚠️ MANDATORY: Complete this checklist BEFORE creating any guide markdown file:**
+
+- [ ] **STOPPED** and calculated current date using JavaScript
+- [ ] **CALCULATED** both date formats (ISO for frontmatter, full for markdown)
+- [ ] **INCLUDED** YAML frontmatter with all required fields
+- [ ] **INCLUDED** `title` field in frontmatter
+- [ ] **INCLUDED** `category` field in frontmatter
+- [ ] **INCLUDED** `date` field in frontmatter (YYYY-MM-DD format)
+- [ ] **INCLUDED** `# Guide Title` matching frontmatter title
+- [ ] **INCLUDED** `**Creation Date:**` field (Month DD, YYYY format)
+- [ ] **INCLUDED** `**Updated Date:**` field (Month DD, YYYY format)
+- [ ] **VERIFIED** author field in frontmatter matches GitHub username (if applicable)
+- [ ] **VERIFIED** frontmatter date is ISO format (YYYY-MM-DD)
+- [ ] **VERIFIED** markdown dates are full format (Month DD, YYYY)
+- [ ] **VERIFIED** title in frontmatter matches `# Guide Title`
+
+**If any checkbox is unchecked, DO NOT create the file until all are complete.**
+
+---
+
+## Examples
+
+### ✅ GOOD: Correct Template Structure
+
+```markdown
+---
+title: Getting Started with Feedric
+description: A comprehensive guide to help you get started with Feedric.
+category: Getting Started
+tags: [basics, onboarding, setup]
+author: adriaanbalt
+date: 2025-01-15
+---
+
+# Getting Started with Feedric
+
+**Creation Date:** January 15, 2025
+**Updated Date:** January 15, 2025
+
+---
+
+## Introduction
+
+[Guide content here]
+```
+
+### ❌ BAD: Missing Required Fields
+
+```markdown
+---
+title: Getting Started
+date: 2025-01-15
+---
+
+# Getting Started
+
+[Content here]
+```
+
+**Problems:**
+- Missing `category` in frontmatter
+- Missing markdown creation date fields
+- Missing `**Creation Date:**` and `**Updated Date:**`
+
+### ❌ BAD: Wrong Date Formats
+
+```markdown
+---
+title: Getting Started
+date: January 15, 2025
+---
+
+# Getting Started
+
+**Creation Date:** 2025-01-15
+**Updated Date:** 01/15/2025
+```
+
+**Problems:**
+- Frontmatter date should be ISO format (`YYYY-MM-DD`)
+- Markdown dates should be full format (`Month DD, YYYY`)
+
+### ✅ GOOD: Updated File
+
+```markdown
+---
+title: Getting Started with Feedric
+description: A comprehensive guide to help you get started with Feedric.
+category: Getting Started
+tags: [basics, onboarding, setup]
+author: adriaanbalt
+date: 2025-01-20
+---
+
+# Getting Started with Feedric
+
+**Creation Date:** January 15, 2025
+**Updated Date:** January 20, 2025
+
+---
+
+## Introduction
+
+[Updated content here]
+```
+
+**Note:** Both `date` in frontmatter and `**Updated Date:**` were updated when the file was modified.
+
+---
+
+## Integration with Other Rules
+
+This rule works in conjunction with:
+
+- `.cursor/rules/markdown-creation.mdc` - General markdown creation standards
+- `.cursor/rules/docs-organization.mdc` - File organization standards
+- `.cursor/rules/file-organization.mdc` - General file organization
+
+**🚨 REMEMBER**:
+
+1. **BEFORE creating any guide markdown file**, calculate the current date using JavaScript
+2. **ALWAYS include** YAML frontmatter with required fields
+3. **ALWAYS include** markdown creation date fields after frontmatter
+4. **USE correct date formats** - ISO in frontmatter, full format in markdown
+5. **MATCH titles** - frontmatter `title` should match `# Guide Title`
+6. **AUTO-UPDATE** both date fields whenever modifying a guide
+7. **CHECK this rule** every time you create a new guide in `docs/guides/`
+
+**This rule applies ONLY to markdown files in the `docs/guides/` folder!**

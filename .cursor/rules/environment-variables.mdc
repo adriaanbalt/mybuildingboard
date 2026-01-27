@@ -1,0 +1,155 @@
+---
+description: Standards for environment variables. Covers naming, validation, and usage patterns.
+globs: "**/*.{ts,tsx,js,json}"
+alwaysApply: false
+---
+
+# Environment Variables Standards
+
+## Naming Conventions
+
+### 1. NEXT_PUBLIC_ Prefix
+
+**Use `NEXT_PUBLIC_` for client-accessible variables**:
+```typescript
+// ✅ Good - Safe to expose
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_APP_URL
+NEXT_PUBLIC_POSTHOG_KEY
+
+// ❌ Bad - Never expose secrets
+NEXT_PUBLIC_STRIPE_SECRET_KEY
+NEXT_PUBLIC_DATABASE_PASSWORD
+```
+
+### 2. Server-Only Variables
+
+**No prefix for server-only variables**:
+```typescript
+// Server-side only
+STRIPE_SECRET_KEY
+SUPABASE_SERVICE_ROLE_KEY
+OPENAI_API_KEY
+SLACK_SIGNING_SECRET
+```
+
+## Variable Organization
+
+### 1. Core Application
+```
+NEXT_PUBLIC_APP_URL
+NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_WS_URL
+```
+
+### 2. Supabase
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+### 3. Stripe
+```
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+```
+
+### 4. Integrations
+```
+SLACK_CLIENT_ID
+SLACK_CLIENT_SECRET
+SLACK_SIGNING_SECRET
+SLACK_REDIRECT_URI
+```
+
+## Validation
+
+### 1. Validate on Startup
+
+**Validate environment variables**:
+```typescript
+import { validateEnv } from '@/lib/api/env-validation';
+
+// Throws if required variables are missing
+validateEnv();
+```
+
+### 2. Type-Safe Access
+
+**Use typed environment access**:
+```typescript
+import { env } from '@/lib/api/env';
+
+const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL; // Typed
+```
+
+## Environment File Loading
+
+### 1. Next.js App (TypeScript/JavaScript)
+
+**Environment files are loaded automatically by Next.js**:
+- `.env.local` - Local development (gitignored)
+- `.env.production` - Production build-time variables
+- `.env` - Default values (committed)
+
+### 2. Background Worker (Python)
+
+**The background worker automatically loads environment files**:
+- **Priority:** `.env.local` → `.env.production` → System environment
+- **Location:** Project root (not in `services/background-worker/`)
+- **Implementation:** Uses `python-dotenv` in `main.py`
+
+```python
+# services/background-worker/main.py automatically loads:
+# 1. .env.local (if exists) - for local development
+# 2. .env.production (if .env.local doesn't exist) - for production-like testing
+# 3. System environment variables (final fallback)
+```
+
+**Required variables for background worker:**
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://127.0.0.1:54421  # or production URL
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# OpenAI
+OPENAI_API_KEY=your_openai_key
+
+# Optional
+PORT=8080
+LOG_LEVEL=INFO
+```
+
+## Documentation
+
+### 1. Document in .env.example
+
+**Document all required variables**:
+```bash
+# Core Application
+NEXT_PUBLIC_APP_URL=https://localhost:3000
+NEXT_PUBLIC_API_URL=https://localhost:3000
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://127.0.0.1:54421
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Use NEXT_PUBLIC_ for safe public vars
+- ✅ Validate on startup
+- ✅ Document in .env.example
+- ✅ Use type-safe access
+- ✅ Provide fallback values where appropriate
+
+### DON'T:
+- ❌ Expose secrets with NEXT_PUBLIC_
+- ❌ Commit .env.local
+- ❌ Hardcode values
+- ❌ Skip validation
+- ❌ Use undefined variables

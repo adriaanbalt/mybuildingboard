@@ -1,45 +1,38 @@
 /**
  * Next.js Middleware
- * 
+ *
  * Handles multi-tenant routing and app ID detection.
  */
 
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { createMiddlewareClient } from '@/lib/auth/client';
-import { validateAppId } from '@/lib/app/detection';
+import { validateAppId } from '@/lib/app/detection'
+import { createMiddlewareClient } from '@/lib/auth/server'
+import { createAppUrl } from '@/lib/utils/url'
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 
 /**
  * Public routes that don't require authentication
  */
-const publicRoutes = [
-  '/',
-  '/login',
-  '/signup',
-  '/features',
-  '/pricing',
-  '/privacy',
-  '/terms',
-];
+const publicRoutes = ['/', '/login', '/signup', '/features', '/pricing', '/privacy', '/terms', '/auth/callback']
 
 /**
  * Check if route is public
  */
 function isPublicRoute(pathname: string): boolean {
-  return publicRoutes.some((route) => pathname === route || pathname.startsWith('/api/auth'));
+  return publicRoutes.some((route) => pathname === route || pathname.startsWith('/api/auth'))
 }
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname } = request.nextUrl
 
   // Skip middleware for public routes
   if (isPublicRoute(pathname)) {
-    return NextResponse.next();
+    return NextResponse.next()
   }
 
   // Skip middleware for API routes (they handle auth separately)
   if (pathname.startsWith('/api/')) {
-    return NextResponse.next();
+    return NextResponse.next()
   }
 
   // Skip middleware for static files
@@ -48,82 +41,93 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/public/')
   ) {
-    return NextResponse.next();
+    return NextResponse.next()
   }
 
-  const supabase = createMiddlewareClient(request);
+  const supabase = createMiddlewareClient(request)
 
   // Check authentication
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await supabase.auth.getSession()
 
   // If not authenticated, redirect to login
   if (!session) {
-    const redirectUrl = new URL('/login', request.url);
-    redirectUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(redirectUrl);
+    const redirectUrl = createAppUrl('/login')
+    redirectUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(redirectUrl)
   }
 
   // Get app ID from cookie or header
-  const cookieAppId = request.cookies.get('app_id')?.value;
-  const headerAppId = request.headers.get('x-app-id');
+  const cookieAppId = request.cookies.get('app_id')?.value
+  const headerAppId = request.headers.get('x-app-id')
 
-  let appId: string | null = null;
+  let appId: string | null = null
 
   // Priority: header > cookie > user membership
   if (headerAppId && (await validateAppId(headerAppId))) {
-    appId = headerAppId;
+    appId = headerAppId
   } else if (cookieAppId && (await validateAppId(cookieAppId))) {
-    appId = cookieAppId;
+    appId = cookieAppId
   }
 
   // If no app ID, check user's app memberships
   if (!appId && session?.user) {
-    const supabaseForQuery = createMiddlewareClient(request);
+    // Allow onboarding routes to proceed without redirect loop
+    if (pathname === '/app/create' || pathname === '/app/select') {
+      return NextResponse.next()
+    }
+
+    const supabaseForQuery = createMiddlewareClient(request)
     const { data: memberships } = await supabaseForQuery
       .from('app_members')
       .select('app_id')
-      .eq('user_id', session.user.id);
+      .eq('user_id', session.user.id)
 
-    const userAppIds = memberships?.map((m) => m.app_id) || [];
+    const userAppIds = memberships?.map((m) => m.app_id) || []
 
     if (userAppIds.length === 0) {
       // No apps - redirect to app creation
-      return NextResponse.redirect(new URL('/app/create', request.url));
+      return NextResponse.redirect(createAppUrl('/app/create'))
     } else if (userAppIds.length === 1) {
       // Single app - set app_id cookie and header
-      const response = NextResponse.next();
+      const response = NextResponse.next()
       response.cookies.set('app_id', userAppIds[0], {
         path: '/',
         maxAge: 365 * 24 * 60 * 60, // 1 year
-      });
-      response.headers.set('x-app-id', userAppIds[0]);
-      return response;
+      })
+      response.headers.set('x-app-id', userAppIds[0])
+      return response
     } else {
       // Multiple apps - redirect to app selection
-      return NextResponse.redirect(new URL('/app/select', request.url));
+      return NextResponse.redirect(createAppUrl('/app/select'))
     }
   }
 
   // Validate app ID exists
-  const isValid = await validateAppId(appId);
+  const isValid = await validateAppId(appId)
   if (!isValid) {
     // Invalid app ID - clear cookie and redirect to app selection
-    const response = NextResponse.redirect(new URL('/app/select', request.url));
-    response.cookies.delete('app_id');
-    return response;
+    // But allow /app/select to proceed if already there to prevent redirect loop
+    if (pathname === '/app/select') {
+      const response = NextResponse.next()
+      response.cookies.delete('app_id')
+      return response
+    }
+    const response = NextResponse.redirect(createAppUrl('/app/select'))
+    response.cookies.delete('app_id')
+    return response
   }
 
   // Set app_id in headers and cookies for downstream use
-  const response = NextResponse.next();
-  response.headers.set('x-app-id', appId);
+  const response = NextResponse.next()
+  response.headers.set('x-app-id', appId)
   response.cookies.set('app_id', appId, {
     path: '/',
     maxAge: 365 * 24 * 60 * 60, // 1 year
-  });
+  })
 
-  return response;
+  return response
 }
 
 export const config = {
@@ -136,4 +140,4 @@ export const config = {
      */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
-};
+}

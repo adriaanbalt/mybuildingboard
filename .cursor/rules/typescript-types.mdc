@@ -1,0 +1,416 @@
+---
+description: Standards for TypeScript types and interfaces. Covers type definitions, interfaces, type guards, and type organization.
+globs: "lib/types/**/*.ts,**/*.d.ts,**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# TypeScript Types Standards
+
+## Type Organization
+
+### 1. Type Definitions Location
+
+**ALWAYS** define types in `lib/types/` directory:
+```typescript
+// lib/types/analytics.ts
+export interface AnalyticsData {
+  totalDocuments: number;
+  totalFeedback: number;
+  trends: Trend[];
+}
+
+export interface Trend {
+  date: string;
+  value: number;
+  direction: 'up' | 'down' | 'stable';
+}
+```
+
+### 2. Export from Index
+
+**Export types from index file**:
+```typescript
+// lib/types/index.ts
+export * from './analytics';
+export * from './feedback';
+export * from './subscription';
+```
+
+## Interface vs Type
+
+### 1. Use Interfaces for Object Shapes
+
+**Use interfaces for object shapes**:
+```typescript
+// ✅ Good - Interface for object shape
+export interface Bucket {
+  id: string;
+  name: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ✅ Good - Interface for component props
+export interface ComponentProps {
+  title: string;
+  description?: string;
+  onAction?: () => void;
+}
+```
+
+### 2. Use Types for Unions and Intersections
+
+**Use types for unions, intersections, and computed types**:
+```typescript
+// ✅ Good - Type for union
+export type Status = 'active' | 'inactive' | 'archived';
+
+// ✅ Good - Type for intersection
+export type BucketWithMembers = Bucket & {
+  members: BucketMember[];
+};
+
+// ✅ Good - Type for computed
+export type BucketKeys = keyof Bucket;
+```
+
+## Type Definitions
+
+### 1. Component Props
+
+**ALWAYS** define TypeScript interfaces for props:
+```typescript
+interface DashboardProps {
+  userId: string;
+  initialData?: DashboardData;
+  onUpdate?: (data: DashboardData) => void;
+}
+
+export function Dashboard({ userId, initialData, onUpdate }: DashboardProps) {
+  // Component implementation
+}
+```
+
+### 2. API Request/Response Types
+
+**Define types for API requests and responses**:
+```typescript
+// Request type
+export interface CreateBucketRequest {
+  name: string;
+  description?: string;
+}
+
+// Response type
+export interface CreateBucketResponse {
+  data: Bucket;
+  message?: string;
+}
+
+// Error response type
+export interface ErrorResponse {
+  error: string;
+  type?: string;
+  retryable?: boolean;
+  context?: Record<string, unknown>;
+}
+```
+
+### 3. Hook Return Types
+
+**Define return types for hooks**:
+```typescript
+export interface UseAnalyticsReturn {
+  data: AnalyticsData | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export function useAnalytics(params: AnalyticsFilters): UseAnalyticsReturn {
+  // Hook implementation
+}
+```
+
+## Type Safety
+
+### 1. Avoid `any`
+
+**NEVER** use `any`; use `unknown` and type guards:
+```typescript
+// ❌ Bad
+function processData(data: any) {
+  return data.value;
+}
+
+// ✅ Good
+function processData(data: unknown) {
+  if (isValidData(data)) {
+    return data.value;
+  }
+  throw new Error('Invalid data');
+}
+
+function isValidData(data: unknown): data is { value: string } {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'value' in data &&
+    typeof (data as { value: unknown }).value === 'string'
+  );
+}
+```
+
+### 2. Use Type Guards
+
+**Create type guards for runtime type checking**:
+```typescript
+export function isBucket(data: unknown): data is Bucket {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'id' in data &&
+    'name' in data &&
+    typeof (data as { id: unknown }).id === 'string' &&
+    typeof (data as { name: unknown }).name === 'string'
+  );
+}
+
+// Usage
+if (isBucket(data)) {
+  // TypeScript knows data is Bucket
+  console.log(data.name);
+}
+```
+
+### 3. Use Branded Types for IDs
+
+**Use branded types for type-safe IDs**:
+```typescript
+type BucketId = string & { __brand: 'BucketId' };
+type UserId = string & { __brand: 'UserId' };
+
+function getBucket(id: BucketId): Bucket {
+  // Implementation
+}
+
+// Type-safe ID creation
+function createBucketId(id: string): BucketId {
+  return id as BucketId;
+}
+```
+
+## Flexible Types
+
+### 1. Use Record for Flexible Objects
+
+**Use `Record<string, unknown>` for flexible objects**:
+```typescript
+// ✅ Good
+interface Metadata {
+  [key: string]: unknown;
+}
+
+// Or more specific
+interface Config {
+  [key: string]: string | number | boolean;
+}
+```
+
+### 2. Use Generic Types
+
+**Use generics for reusable types**:
+```typescript
+export interface ApiResponse<T> {
+  data: T;
+  message?: string;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+```
+
+## Database Types
+
+### 1. Database Table Types
+
+**Define types for database tables**:
+```typescript
+// lib/database/types/buckets.ts
+export interface BucketRow {
+  id: string;
+  name: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+// With relationships
+export interface BucketWithMembers extends BucketRow {
+  members: BucketMemberRow[];
+}
+```
+
+### 2. Query Result Types
+
+**Type query results**:
+```typescript
+import type { BucketRow } from '@/lib/database/types';
+
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', bucketId)
+  .single();
+
+const bucket = data as BucketRow;
+```
+
+## Utility Types
+
+### 1. Use Built-in Utility Types
+
+**Use TypeScript utility types**:
+```typescript
+// Partial - all properties optional
+type PartialBucket = Partial<Bucket>;
+
+// Required - all properties required
+type RequiredBucket = Required<Bucket>;
+
+// Pick - select properties
+type BucketSummary = Pick<Bucket, 'id' | 'name'>;
+
+// Omit - exclude properties
+type BucketWithoutDates = Omit<Bucket, 'created_at' | 'updated_at'>;
+
+// Readonly - make all properties readonly
+type ReadonlyBucket = Readonly<Bucket>;
+```
+
+### 2. Custom Utility Types
+
+**Create custom utility types when needed**:
+```typescript
+// Make specific properties optional
+type BucketUpdate = Partial<Pick<Bucket, 'name' | 'description'>> & 
+  Pick<Bucket, 'id'>;
+
+// Extract function return type
+type BucketData = Awaited<ReturnType<typeof fetchBucket>>;
+```
+
+## Type Documentation
+
+### 1. JSDoc Comments
+
+**Document complex types with JSDoc**:
+```typescript
+/**
+ * Represents a bucket (project container) in the system
+ * 
+ * @property id - Unique identifier (UUID)
+ * @property name - Display name of the bucket
+ * @property user_id - Owner of the bucket
+ * @property created_at - ISO timestamp of creation
+ * @property updated_at - ISO timestamp of last update
+ */
+export interface Bucket {
+  id: string;
+  name: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+```
+
+## Type Assertions
+
+### 1. Safe Type Assertions
+
+**Use type assertions carefully**:
+```typescript
+// ✅ Good - with validation
+if (isBucket(data)) {
+  const bucket = data as Bucket;
+}
+
+// ❌ Bad - unsafe assertion
+const bucket = data as Bucket;
+```
+
+### 2. Type Narrowing
+
+**Use type narrowing instead of assertions**:
+```typescript
+// ✅ Good - type narrowing
+if (typeof value === 'string') {
+  // TypeScript knows value is string
+  console.log(value.toUpperCase());
+}
+
+// ❌ Bad - type assertion
+const str = value as string;
+console.log(str.toUpperCase()); // May fail at runtime
+```
+
+## Enum vs Union Types
+
+### 1. Prefer Union Types
+
+**Prefer union types over enums**:
+```typescript
+// ✅ Good - Union type
+export type Status = 'active' | 'inactive' | 'archived';
+
+// ❌ Bad - Enum (unless you need reverse mapping)
+export enum Status {
+  Active = 'active',
+  Inactive = 'inactive',
+  Archived = 'archived'
+}
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Define types in `lib/types/`
+- ✅ Use interfaces for object shapes
+- ✅ Use types for unions and intersections
+- ✅ Define props interfaces for components
+- ✅ Use type guards for runtime checking
+- ✅ Use `unknown` instead of `any`
+- ✅ Document complex types with JSDoc
+- ✅ Use branded types for IDs (when needed)
+- ✅ Export types from index file
+
+### DON'T:
+- ❌ Use `any` type
+- ❌ Skip type definitions
+- ❌ Use unsafe type assertions
+- ❌ Mix interfaces and types unnecessarily
+- ❌ Create types without documentation
+- ❌ Use enums when union types suffice
+- ❌ Expose internal type details
+- ❌ Skip type guards for runtime validation
+
+## Type Checklist
+
+Before creating types, ensure:
+- [ ] Types defined in `lib/types/`
+- [ ] Exported from index file
+- [ ] Interfaces for object shapes
+- [ ] Types for unions/intersections
+- [ ] Type guards for runtime validation
+- [ ] JSDoc documentation for complex types
+- [ ] No `any` types used
+- [ ] Proper generic types (if needed)

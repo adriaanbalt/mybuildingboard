@@ -1,0 +1,496 @@
+---
+description: Standards and best practices for folder restructuring and file moves. Prevents code loss during refactoring by ensuring proper git operations, verification steps, and file integrity checks.
+globs: "**/*"
+alwaysApply: true
+---
+
+# Folder Restructuring Standards
+
+## CRITICAL: Preventing Code Loss During Moves
+
+**This rule prevents the code loss that occurred during the November 2025 background-worker folder restructure.**
+
+---
+
+## 🚨 Mandatory Steps for Folder Restructuring
+
+### 1. **ALWAYS Use Git for Moves**
+
+**❌ NEVER manually move files:**
+```bash
+# ❌ WRONG - Loses git history and can miss files
+mv old-folder/file.py new-folder/file.py
+cp -r old-folder new-folder
+```
+
+**✅ ALWAYS use `git mv`:**
+```bash
+# ✅ CORRECT - Preserves git history
+git mv old-folder/file.py new-folder/file.py
+git mv old-folder new-folder  # For entire directories
+```
+
+**Why This Matters:**
+- Preserves git history and blame information
+- Git tracks the move operation
+- Easier to verify what was moved
+- Prevents accidental file loss
+
+---
+
+### 2. **Pre-Move Verification Checklist**
+
+**Before moving any files, verify:**
+
+- [ ] **List all files to be moved:**
+  ```bash
+  find old-folder -type f | sort
+  ```
+
+- [ ] **Check file sizes and line counts:**
+  ```bash
+  find old-folder -type f -name "*.py" -exec wc -l {} \;
+  find old-folder -type f -name "*.ts" -exec wc -l {} \;
+  ```
+
+- [ ] **Check for uncommitted changes:**
+  ```bash
+  git status
+  git diff
+  ```
+
+- [ ] **Identify critical files:**
+  - Core functionality files
+  - Recently fixed files (check git log)
+  - Configuration files
+  - Documentation files
+
+- [ ] **Note the latest commit with fixes:**
+  ```bash
+  git log --oneline old-folder/ | head -5
+  ```
+
+---
+
+### 3. **Move Operation Process**
+
+**Step-by-step move process:**
+
+1. **Create target directory if needed:**
+   ```bash
+   mkdir -p new-folder
+   ```
+
+2. **Move files using git:**
+   ```bash
+   # For individual files
+   git mv old-folder/file.py new-folder/file.py
+   
+   # For entire directory
+   git mv old-folder new-folder
+   ```
+
+3. **Verify move in git:**
+   ```bash
+   git status
+   # Should show "renamed" not "deleted" and "new file"
+   ```
+
+4. **Check moved files exist:**
+   ```bash
+   find new-folder -type f | wc -l
+   # Should match count from pre-move verification
+   ```
+
+---
+
+### 4. **Post-Move Verification (CRITICAL)**
+
+**After moving files, ALWAYS verify:**
+
+#### **A. File Count Verification**
+```bash
+# Count files before move (save this)
+OLD_COUNT=$(find old-folder -type f | wc -l)
+
+# Count files after move
+NEW_COUNT=$(find new-folder -type f | wc -l)
+
+# Verify they match
+if [ "$OLD_COUNT" != "$NEW_COUNT" ]; then
+  echo "❌ FILE COUNT MISMATCH: $OLD_COUNT -> $NEW_COUNT"
+  exit 1
+fi
+```
+
+#### **B. File Content Verification**
+```bash
+# Check critical files have correct content
+# Compare line counts of key files
+wc -l old-folder/core/orchestrator.py new-folder/core/orchestrator.py
+wc -l old-folder/processors/base_processor.py new-folder/processors/base_processor.py
+
+# Verify file sizes match
+ls -lh old-folder/core/orchestrator.py new-folder/core/orchestrator.py
+```
+
+#### **C. Git History Verification**
+```bash
+# Verify git history is preserved
+git log --follow new-folder/core/orchestrator.py | head -5
+
+# Check that recent fixes are included
+git log --oneline new-folder/ | grep -i "fix\|critical\|important"
+```
+
+#### **D. Code Integrity Checks**
+```bash
+# Check for critical functions/classes
+grep -r "def update_document_status_verified" new-folder/
+grep -r "def store_chunks" new-folder/
+grep -r "class.*Orchestrator" new-folder/
+
+# Verify imports still work
+# (run tests or linting)
+```
+
+#### **E. Documentation Files**
+```bash
+# Verify all documentation moved
+find old-folder -name "*.md" -type f
+find new-folder -name "*.md" -type f
+# Compare lists
+```
+
+---
+
+### 5. **Commit Strategy**
+
+**When committing folder moves:**
+
+1. **Stage all moves:**
+   ```bash
+   git add -A
+   git status  # Review what's staged
+   ```
+
+2. **Verify git shows renames:**
+   ```bash
+   git status
+   # Should show "renamed: old-path -> new-path"
+   # NOT "deleted: old-path" and "new file: new-path"
+   ```
+
+3. **Commit with descriptive message:**
+   ```bash
+   git commit -m "refactor: move background-worker from backend/extract/ to services/
+
+   - Moved all files preserving git history
+   - Verified file counts and content integrity
+   - All critical fixes from previous commits included
+   - Documentation files preserved"
+   ```
+
+4. **Verify commit:**
+   ```bash
+   git show --stat HEAD
+   # Should show renames, not deletions + additions
+   ```
+
+---
+
+## 🔍 Verification Script Template
+
+**Create a verification script before major moves:**
+
+```bash
+#!/bin/bash
+# verify-folder-move.sh
+
+OLD_DIR="$1"
+NEW_DIR="$2"
+
+if [ -z "$OLD_DIR" ] || [ -z "$NEW_DIR" ]; then
+  echo "Usage: $0 <old-dir> <new-dir>"
+  exit 1
+fi
+
+echo "🔍 Verifying folder move: $OLD_DIR -> $NEW_DIR"
+
+# File count check
+OLD_COUNT=$(find "$OLD_DIR" -type f 2>/dev/null | wc -l)
+NEW_COUNT=$(find "$NEW_DIR" -type f 2>/dev/null | wc -l)
+
+echo "📊 File counts: $OLD_COUNT -> $NEW_COUNT"
+
+if [ "$OLD_COUNT" != "$NEW_COUNT" ]; then
+  echo "❌ FILE COUNT MISMATCH!"
+  exit 1
+fi
+
+# Critical files check
+CRITICAL_FILES=(
+  "core/orchestrator.py"
+  "processors/base_processor.py"
+  "main.py"
+  "Dockerfile"
+  "README.md"
+)
+
+for file in "${CRITICAL_FILES[@]}"; do
+  OLD_FILE="$OLD_DIR/$file"
+  NEW_FILE="$NEW_DIR/$file"
+  
+  if [ -f "$OLD_FILE" ] && [ ! -f "$NEW_FILE" ]; then
+    echo "❌ Missing critical file: $file"
+    exit 1
+  fi
+  
+  if [ -f "$OLD_FILE" ] && [ -f "$NEW_FILE" ]; then
+    OLD_LINES=$(wc -l < "$OLD_FILE")
+    NEW_LINES=$(wc -l < "$NEW_FILE")
+    
+    if [ "$OLD_LINES" != "$NEW_LINES" ]; then
+      echo "⚠️  Line count mismatch for $file: $OLD_LINES -> $NEW_LINES"
+    fi
+  fi
+done
+
+echo "✅ Verification complete"
+```
+
+---
+
+## 🚫 Common Mistakes to Avoid
+
+### **Mistake 1: Manual Copy Instead of Git Move**
+```bash
+# ❌ WRONG
+cp -r old-folder new-folder
+rm -rf old-folder
+
+# ✅ CORRECT
+git mv old-folder new-folder
+```
+
+### **Mistake 2: Moving Before All Fixes Are Committed**
+```bash
+# ❌ WRONG - Move before fixes are committed
+git mv old-folder new-folder
+# Later: fixes are lost because they were in old location
+
+# ✅ CORRECT - Commit fixes first, then move
+git add old-folder/
+git commit -m "fix: critical fixes"
+git mv old-folder new-folder
+```
+
+### **Mistake 3: Not Verifying After Move**
+```bash
+# ❌ WRONG - Move and commit without verification
+git mv old-folder new-folder
+git commit -m "moved folder"
+
+# ✅ CORRECT - Verify before committing
+git mv old-folder new-folder
+# Run verification checks
+./verify-folder-move.sh old-folder new-folder
+git commit -m "moved folder"
+```
+
+### **Mistake 4: Partial Moves**
+```bash
+# ❌ WRONG - Moving some files manually
+git mv old-folder/file1.py new-folder/
+# Manually copy file2.py (loses history)
+
+# ✅ CORRECT - Move all files with git
+git mv old-folder/file1.py new-folder/
+git mv old-folder/file2.py new-folder/
+```
+
+---
+
+## 📋 Folder Restructure Checklist
+
+**Before starting a folder restructure:**
+
+- [ ] Identify all files to be moved
+- [ ] Note file counts and line counts
+- [ ] Check for uncommitted changes
+- [ ] Identify critical files with recent fixes
+- [ ] Review git history for important commits
+- [ ] Create verification script if needed
+
+**During the move:**
+
+- [ ] Use `git mv` for all file operations
+- [ ] Move files in logical groups
+- [ ] Verify git status shows renames
+- [ ] Check moved files exist in new location
+
+**After the move:**
+
+- [ ] Verify file counts match
+- [ ] Verify file contents (line counts, sizes)
+- [ ] Check git history is preserved
+- [ ] Verify critical functions/classes exist
+- [ ] Check documentation files moved
+- [ ] Run tests to verify functionality
+- [ ] Update import paths if needed
+- [ ] Update documentation references
+- [ ] Commit with descriptive message
+
+**Before merging/deploying:**
+
+- [ ] Review git diff to ensure renames (not deletions)
+- [ ] Verify no files are missing
+- [ ] Check that recent fixes are included
+- [ ] Test the moved code works correctly
+
+---
+
+## 🔧 Special Cases
+
+### **Moving Files Across Major Boundaries**
+
+**When moving between major directories (e.g., `backend/` to `services/`):**
+
+1. **Extra verification needed:**
+   - Check all import paths
+   - Update configuration files
+   - Update deployment scripts
+   - Update documentation
+
+2. **Update references:**
+   ```bash
+   # Find all references to old path
+   grep -r "backend/extract/background-worker" .
+   grep -r "from.*backend.extract" .
+   ```
+
+3. **Update imports:**
+   ```python
+   # Old
+   from backend.extract.background_worker import something
+   
+   # New
+   from services.background_worker import something
+   ```
+
+### **Moving Files with Dependencies**
+
+**When files have external dependencies:**
+
+1. **Identify dependencies:**
+   ```bash
+   # Find files that import from old location
+   grep -r "import.*old-folder" .
+   grep -r "from.*old-folder" .
+   ```
+
+2. **Update all references:**
+   - Update import statements
+   - Update configuration files
+   - Update documentation
+   - Update test files
+
+3. **Verify after updates:**
+   ```bash
+   # Run linter
+   yarn lint
+   
+   # Run tests
+   yarn test
+   ```
+
+---
+
+## 🎯 Best Practices
+
+### **1. Move in Small Batches**
+- Move related files together
+- Verify after each batch
+- Commit frequently
+
+### **2. Preserve Git History**
+- Always use `git mv`
+- Never manually copy and delete
+- Verify history with `git log --follow`
+
+### **3. Verify Everything**
+- File counts
+- File contents
+- Git history
+- Code functionality
+- Tests pass
+
+### **4. Document the Move**
+- Clear commit message
+- Update README if needed
+- Note any breaking changes
+
+### **5. Test After Move**
+- Run all tests
+- Check imports work
+- Verify functionality
+- Test deployment if applicable
+
+---
+
+## 🚨 Red Flags
+
+**Stop and investigate if you see:**
+
+- ❌ Git shows "deleted" and "new file" instead of "renamed"
+- ❌ File count doesn't match after move
+- ❌ Line counts changed significantly
+- ❌ Critical functions missing from moved files
+- ❌ Recent fixes not present in moved files
+- ❌ Tests failing after move
+- ❌ Import errors after move
+
+**If any red flags appear:**
+1. **STOP** the move operation
+2. **Investigate** what went wrong
+3. **Restore** from git if needed
+4. **Fix** the issue before proceeding
+5. **Re-verify** everything
+
+---
+
+## 📚 Lessons Learned
+
+**From the November 2025 background-worker incident:**
+
+1. **Problem:** Folder restructure moved code but lost critical fixes
+2. **Root Cause:** Move happened before all fixes were committed, or files were overwritten with older versions
+3. **Impact:** Missing idempotency fixes, status update fixes, and documentation
+4. **Solution:** Restored from git history, but prevention is better
+
+**This rule prevents similar incidents by:**
+- Enforcing git-based moves
+- Requiring verification steps
+- Checking file integrity
+- Preserving git history
+- Verifying critical fixes are included
+
+---
+
+## ✅ Success Criteria
+
+**A folder restructure is successful when:**
+
+- ✅ All files moved using `git mv`
+- ✅ File counts match before and after
+- ✅ File contents verified (line counts, sizes)
+- ✅ Git history preserved (`git log --follow` works)
+- ✅ Critical fixes from recent commits included
+- ✅ All tests pass
+- ✅ No import errors
+- ✅ Documentation updated
+- ✅ Git shows renames, not deletions
+
+---
+
+**Remember: It's better to verify thoroughly than to restore from git history later!**

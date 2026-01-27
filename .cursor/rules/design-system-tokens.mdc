@@ -1,0 +1,393 @@
+---
+description: Design system token standards. Enforces use of CSS variables and semantic tokens instead of hardcoded colors. Ensures easy design system swapping and consistent styling.
+alwaysApply: true
+---
+
+# Design System Token Standards
+
+## CRITICAL: Always Use Semantic Tokens
+
+**This rule applies to ALL styling across the codebase.** When creating or modifying components, ALWAYS use semantic design tokens instead of hardcoded Tailwind color classes.
+
+## Core Principles
+
+1. **Use CSS Variables**: All colors are defined as CSS variables in `app/globals.css`
+2. **Use Semantic Tokens**: Use semantic token names (`primary`, `danger`, `neutral`, `text`, `surface`) instead of color names (`slate`, `gray`, `blue`)
+3. **Use Component Classes**: Prefer component classes (`.card`, `.btn-primary`) when available
+4. **Use Token Helpers**: Use TypeScript token helpers from `lib/design/tokens.ts` for type safety
+5. **Never Hardcode Colors**: Never use hardcoded Tailwind color classes like `bg-slate-*`, `text-gray-*`, `border-blue-*`
+
+## Token System Architecture
+
+### CSS Variables (Source of Truth)
+
+All design tokens are defined in `app/globals.css` as CSS variables:
+
+```css
+:root {
+  --color-primary: #a78bfa;
+  --color-primary-light: #c4b5fd;
+  --color-primary-dark: #8b5cf6;
+  --color-danger: #dc2626;
+  --color-neutral: #f8fafc;
+  --color-text: #0f172a;
+  /* ... all tokens */
+}
+```
+
+### Tailwind Config (References CSS Variables)
+
+Tailwind colors reference CSS variables in `tailwind.config.ts`:
+
+```typescript
+colors: {
+  primary: {
+    DEFAULT: "var(--color-primary)",
+    light: "var(--color-primary-light)",
+    dark: "var(--color-primary-dark)",
+  },
+  // ... all tokens reference CSS variables
+}
+```
+
+## Usage Patterns
+
+### ✅ CORRECT: Using Semantic Tokens
+
+```tsx
+// ✅ Good - Semantic tokens
+<div className="bg-primary text-text">
+  Content
+</div>
+
+// ✅ Good - Component classes
+<div className="card">
+  <div className="card-header">
+    <h2 className="text-text">Title</h2>
+  </div>
+</div>
+
+// ✅ Good - Token helpers (type-safe)
+import { tokens } from '@/lib/design/tokens';
+
+<div className={tokens.bg.surface}>
+  <p className={tokens.text.primary}>Content</p>
+</div>
+
+// ✅ Good - Status colors
+<div className="bg-success/10 text-success">
+  Success message
+</div>
+```
+
+### ❌ WRONG: Hardcoded Colors
+
+```tsx
+// ❌ Bad - Hardcoded Tailwind colors
+<div className="bg-slate-50 text-slate-900">
+  Content
+</div>
+
+// ❌ Bad - Hardcoded gray colors
+<div className="bg-gray-100 text-gray-700">
+  Content
+</div>
+
+// ❌ Bad - Hardcoded blue colors
+<div className="bg-blue-500 text-blue-700">
+  Content
+</div>
+```
+
+## Token Mapping Reference
+
+### Background Colors
+
+| ❌ Hardcoded | ✅ Semantic Token |
+|-------------|------------------|
+| `bg-slate-50` | `bg-neutral` |
+| `bg-slate-900` | `bg-neutral-darker` |
+| `bg-white` | `bg-surface-light` |
+| `bg-gray-100` | `bg-neutral` |
+| `bg-gray-800` | `bg-neutral-dark` |
+
+### Text Colors
+
+| ❌ Hardcoded | ✅ Semantic Token |
+|-------------|------------------|
+| `text-slate-900` | `text-text` |
+| `text-slate-600` | `text-text-light` |
+| `text-slate-400` | `text-text-light` |
+| `text-gray-700` | `text-text` |
+| `text-gray-500` | `text-text-light` |
+
+### Border Colors
+
+| ❌ Hardcoded | ✅ Semantic Token |
+|-------------|------------------|
+| `border-slate-200` | `border-neutral/20` (use CSS for opacity) |
+| `border-slate-700` | `border-neutral-dark/30` (use CSS for opacity) |
+| `border-gray-300` | `border-neutral/30` (use CSS for opacity) |
+
+### Status Colors
+
+| ❌ Hardcoded | ✅ Semantic Token |
+|-------------|------------------|
+| `bg-green-100` | `bg-success/10` |
+| `text-green-700` | `text-success` |
+| `bg-red-100` | `bg-danger/10` |
+| `text-red-700` | `text-danger` |
+| `bg-yellow-100` | `bg-warning/10` |
+| `text-yellow-700` | `text-warning` |
+| `bg-blue-100` | `bg-info/10` |
+| `text-blue-700` | `text-info` |
+
+## Component Classes (Preferred)
+
+**Always prefer component classes when available:**
+
+```tsx
+// ✅ Good - Use component classes
+<div className="card">
+  <div className="card-header">
+    <h2 className="text-text">Title</h2>
+  </div>
+  <div className="card-body">
+    <p className="text-text-light">Content</p>
+  </div>
+  <div className="card-footer">
+    <button className="btn-primary">Action</button>
+  </div>
+</div>
+
+// Available component classes:
+// - .card, .card-hover, .card-elevated, .card-interactive
+// - .card-primary, .card-success, .card-warning, .card-danger
+// - .btn, .btn-primary, .btn-secondary, .btn-outline, .btn-ghost
+// - .metric-card, .metric-value, .metric-label
+// - .feature-card, .feature-icon, .feature-title
+// - .pricing-card, .pricing-card-popular
+// - .activity-card, .activity-icon, .activity-title
+```
+
+## Token Helpers (Type-Safe)
+
+**Use TypeScript token helpers for type safety:**
+
+```tsx
+import { tokens, semanticColors } from '@/lib/design/tokens';
+
+// ✅ Good - Type-safe token usage
+<div className={tokens.bg.surface}>
+  <p className={tokens.text.primary}>Content</p>
+  <div className={tokens.border.default}>Bordered</div>
+</div>
+
+// ✅ Good - Semantic status colors
+<div className={`${semanticColors.success.bg} ${semanticColors.success.text}`}>
+  Success message
+</div>
+```
+
+## Dark Mode Support
+
+**All semantic tokens automatically support dark mode:**
+
+```tsx
+// ✅ Good - Automatic dark mode support
+<div className="bg-surface-light dark:bg-surface-dark">
+  <p className="text-text dark:text-text-dark">Content</p>
+</div>
+
+// ✅ Good - Component classes handle dark mode automatically
+<div className="card">
+  {/* Dark mode handled by .card class */}
+</div>
+```
+
+## Opacity in Component Classes
+
+**When using opacity with custom colors in `@apply` directives, use CSS directly:**
+
+```css
+/* ✅ Good - Use CSS for opacity in component classes */
+.card-primary {
+  @apply card;
+  border-color: rgba(167, 139, 250, 0.2); /* primary with 20% opacity */
+  background-color: rgba(167, 139, 250, 0.05); /* primary with 5% opacity */
+}
+
+/* ❌ Bad - Opacity modifiers don't work in @apply */
+.card-primary {
+  @apply card border-primary/20 bg-primary/5; /* Won't work */
+}
+```
+
+**In components, opacity modifiers work fine:**
+
+```tsx
+// ✅ Good - Opacity modifiers work in components
+<div className="bg-primary/10 text-primary">
+  Content
+</div>
+```
+
+## Theme Switching
+
+**Themes can be switched by updating CSS variables:**
+
+```css
+/* app/globals.css */
+[data-theme="new-design-system"] {
+  --color-primary: #NEW_COLOR;
+  --color-danger: #NEW_COLOR;
+  /* All components automatically update */
+}
+```
+
+**Use ThemeProvider for runtime theme switching:**
+
+```tsx
+import { ThemeProvider, useTheme } from '@/lib/design/ThemeProvider';
+
+<ThemeProvider defaultTheme="default">
+  <App />
+</ThemeProvider>
+
+// In components
+function ThemeSwitcher() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <button onClick={() => setTheme("new-design-system")}>
+      Switch Theme
+    </button>
+  );
+}
+```
+
+## Migration Checklist
+
+When creating or modifying components:
+
+- [ ] ✅ Use semantic tokens (`bg-primary`, `text-text`) instead of hardcoded colors
+- [ ] ✅ Use component classes (`.card`, `.btn-primary`) when available
+- [ ] ✅ Use token helpers (`tokens.bg.surface`) for type safety
+- [ ] ✅ Verify dark mode support (automatic with semantic tokens)
+- [ ] ❌ Never use `bg-slate-*`, `text-gray-*`, `border-blue-*`
+- [ ] ❌ Never hardcode hex colors in components
+- [ ] ❌ Never use opacity modifiers in `@apply` directives (use CSS)
+
+## File Organization
+
+### Design System Files
+
+- `app/globals.css` - CSS variables and component classes
+- `tailwind.config.ts` - Tailwind config referencing CSS variables
+- `lib/design/tokens.ts` - TypeScript token helpers
+- `lib/design/ThemeProvider.tsx` - Theme switching component
+
+### Import Patterns
+
+```tsx
+// ✅ Good - Import token helpers when needed
+import { tokens } from '@/lib/design/tokens';
+
+// ✅ Good - Import ThemeProvider for theme switching
+import { ThemeProvider, useTheme } from '@/lib/design/ThemeProvider';
+
+// ✅ Good - Component classes are global (no import needed)
+<div className="card">
+```
+
+## Examples
+
+### Creating a New Component
+
+```tsx
+// ✅ Good - New component using semantic tokens
+export function NewComponent() {
+  return (
+    <div className="card">
+      <div className="card-header">
+        <h2 className="text-text dark:text-text-dark">Title</h2>
+      </div>
+      <div className="card-body">
+        <p className="text-text-light">Content</p>
+        <button className="btn-primary">Action</button>
+      </div>
+    </div>
+  );
+}
+```
+
+### Updating Existing Component
+
+```tsx
+// ❌ Before - Hardcoded colors
+<div className="bg-slate-50 text-slate-900 border border-slate-200">
+  Content
+</div>
+
+// ✅ After - Semantic tokens
+<div className="bg-neutral text-text border border-neutral/20">
+  Content
+</div>
+
+// ✅ Better - Component class
+<div className="card">
+  Content
+</div>
+```
+
+## DO's and DON'Ts
+
+### DO:
+
+- ✅ **ALWAYS** use semantic tokens (`bg-primary`, `text-text`)
+- ✅ **ALWAYS** use component classes when available (`.card`, `.btn-primary`)
+- ✅ **ALWAYS** use token helpers for type safety
+- ✅ **ALWAYS** verify dark mode support
+- ✅ **ALWAYS** use CSS variables for new design tokens
+- ✅ **ALWAYS** reference CSS variables in Tailwind config
+
+### DON'T:
+
+- ❌ **NEVER** use hardcoded Tailwind colors (`bg-slate-*`, `text-gray-*`)
+- ❌ **NEVER** hardcode hex colors in components
+- ❌ **NEVER** use opacity modifiers in `@apply` directives
+- ❌ **NEVER** create new color classes without CSS variables
+- ❌ **NEVER** bypass the token system
+- ❌ **NEVER** use color names in class names (`bg-blue-500`)
+
+## Enforcement
+
+**This rule is ALWAYS APPLIED.** When creating or modifying files:
+
+1. **Check for hardcoded colors** - Replace with semantic tokens
+2. **Check for component classes** - Use when available
+3. **Check for token helpers** - Use for type safety
+4. **Verify dark mode** - Ensure automatic support
+
+## Benefits
+
+### Performance
+- ✅ Maintains Tailwind's excellent performance
+- ✅ Small bundle size (10-50KB)
+- ✅ Fast time to display
+- ✅ No runtime overhead
+
+### Maintainability
+- ✅ Single source of truth (CSS variables)
+- ✅ Easy design system swapping
+- ✅ Consistent styling patterns
+- ✅ Type-safe token usage
+
+### Developer Experience
+- ✅ Clear patterns and guidelines
+- ✅ TypeScript support
+- ✅ Easy theme switching
+- ✅ Better code organization
+
+---
+
+**Remember: Semantic tokens enable easy design system swapping while maintaining Tailwind's performance benefits!**

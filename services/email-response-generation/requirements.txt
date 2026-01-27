@@ -1,0 +1,10 @@
+# Email Response Generation Cloud Function Dependencies
+
+# Supabase
+supabase==2.0.0
+
+# Email service (shared)
+# Note: This should reference the email-ingestion service's src/ directory
+
+# Utilities
+python-dateutil==2.8.2

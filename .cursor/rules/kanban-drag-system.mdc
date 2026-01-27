@@ -1,0 +1,534 @@
+---
+description: Kanban board drag-to-scroll system implementation guide. Covers board background dragging, card dragging coexistence, touch support, and performance optimization.
+globs: "**/*Kanban*.{ts,tsx},**/GenericKanbanBoard.{ts,tsx}"
+alwaysApply: false
+---
+
+# Kanban Board Drag System
+
+## Overview
+
+The kanban board implements a dual drag system:
+1. **Board Drag-to-Scroll**: Click and drag the board background to scroll horizontally and vertically
+2. **Card Drag-and-Drop**: Drag cards between columns to change their status
+
+These two systems coexist without conflicts by detecting the drag target and context.
+
+## Core Principles
+
+### 1. Element-Based Detection
+
+**Only initiate board drag when clicking on the board background**, not on interactive elements:
+
+```typescript
+const handleBoardMouseDown = useCallback((e: React.MouseEvent) => {
+  const target = e.target as HTMLElement;
+  
+  // Check if we clicked on a draggable card or any interactive element
+  const isCard = target.closest('[draggable="true"]') || 
+                 target.closest('button') || 
+                 target.closest('a') ||
+                 target.closest('input') ||
+                 target.closest('textarea') ||
+                 target.closest('select');
+  
+  if (isCard || !boardContainerRef.current) {
+    return; // Don't start board drag
+  }
+  
+  // ... start board drag
+}, []);
+```
+
+### 2. Coexistence with Card Dragging
+
+**Board drag must not interfere with card dragging**:
+
+```typescript
+const handleBoardMouseDown = useCallback((e: React.MouseEvent) => {
+  // Don't start board drag if a card is being dragged
+  if (draggedItemId) {
+    return;
+  }
+  
+  // ... rest of board drag logic
+}, [draggedItemId]);
+```
+
+### 3. Scrollability Detection
+
+**Only enable drag-to-scroll when the board is actually scrollable**:
+
+```typescript
+// Check if board is scrollable
+const container = boardContainerRef.current;
+const isScrollableX = container.scrollWidth > container.clientWidth;
+const isScrollableY = container.scrollHeight > container.clientHeight;
+
+if (!isScrollableX && !isScrollableY) {
+  return; // Board is not scrollable, don't enable drag
+}
+```
+
+## Implementation Pattern
+
+### State Management
+
+**Use refs for synchronous access and state for React updates**:
+
+```typescript
+// Refs for synchronous access in event handlers
+const boardContainerRef = useRef<HTMLDivElement | null>(null);
+const isBoardDraggingRef = useRef(false);
+const boardDragStartRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+
+// State for React updates (cursor, user-select)
+const [isBoardDragging, setIsBoardDragging] = useState(false);
+const [isBoardScrollable, setIsBoardScrollable] = useState(false);
+```
+
+### Mouse Event Handlers
+
+**Track initial position and update scroll during drag**:
+
+```typescript
+const handleBoardMouseDown = useCallback((e: React.MouseEvent) => {
+  // ... validation checks ...
+  
+  e.preventDefault();
+  
+  isBoardDraggingRef.current = true;
+  setIsBoardDragging(true);
+  boardDragStartRef.current = {
+    x: e.clientX,
+    y: e.clientY,
+    scrollLeft: container.scrollLeft,
+    scrollTop: container.scrollTop,
+  };
+}, [draggedItemId]);
+
+const handleBoardMouseMove = useCallback((e: MouseEvent) => {
+  if (!isBoardDraggingRef.current || !boardDragStartRef.current || !boardContainerRef.current) {
+    return;
+  }
+  
+  const container = boardContainerRef.current;
+  const deltaX = boardDragStartRef.current.x - e.clientX;
+  const deltaY = boardDragStartRef.current.y - e.clientY;
+  
+  container.scrollLeft = boardDragStartRef.current.scrollLeft + deltaX;
+  container.scrollTop = boardDragStartRef.current.scrollTop + deltaY;
+}, []);
+
+const handleBoardMouseUp = useCallback(() => {
+  if (!isBoardDraggingRef.current || !boardContainerRef.current) {
+    return;
+  }
+  
+  isBoardDraggingRef.current = false;
+  setIsBoardDragging(false);
+  boardDragStartRef.current = null;
+}, []);
+```
+
+### Touch Event Handlers
+
+**Support mobile/tablet devices with touch events**:
+
+```typescript
+const handleBoardTouchStart = useCallback((e: React.TouchEvent) => {
+  if (e.touches.length !== 1) return;
+  
+  // ... validation checks (same as mouse) ...
+  
+  const touch = e.touches[0];
+  isBoardDraggingRef.current = true;
+  setIsBoardDragging(true);
+  boardDragStartRef.current = {
+    x: touch.clientX,
+    y: touch.clientY,
+    scrollLeft: container.scrollLeft,
+    scrollTop: container.scrollTop,
+  };
+}, [draggedItemId]);
+
+const handleBoardTouchMove = useCallback((e: TouchEvent) => {
+  if (!isBoardDraggingRef.current || !boardDragStartRef.current || !boardContainerRef.current || e.touches.length !== 1) {
+    return;
+  }
+  
+  e.preventDefault(); // Prevent default scrolling
+  
+  const container = boardContainerRef.current;
+  const touch = e.touches[0];
+  const deltaX = boardDragStartRef.current.x - touch.clientX;
+  const deltaY = boardDragStartRef.current.y - touch.clientY;
+  
+  container.scrollLeft = boardDragStartRef.current.scrollLeft + deltaX;
+  container.scrollTop = boardDragStartRef.current.scrollTop + deltaY;
+}, []);
+
+const handleBoardTouchEnd = useCallback(() => {
+  isBoardDraggingRef.current = false;
+  setIsBoardDragging(false);
+  boardDragStartRef.current = null;
+}, []);
+```
+
+### Global Event Listeners
+
+**Attach global listeners that check ref state**:
+
+```typescript
+useEffect(() => {
+  const handleGlobalMouseMove = (e: MouseEvent) => {
+    if (isBoardDraggingRef.current) {
+      handleBoardMouseMove(e);
+    }
+  };
+  
+  const handleGlobalMouseUp = () => {
+    if (isBoardDraggingRef.current) {
+      handleBoardMouseUp();
+    }
+  };
+  
+  // ... touch handlers ...
+  
+  window.addEventListener('mousemove', handleGlobalMouseMove, { passive: false });
+  window.addEventListener('mouseup', handleGlobalMouseUp);
+  window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+  window.addEventListener('touchend', handleGlobalTouchEnd);
+  
+  return () => {
+    window.removeEventListener('mousemove', handleGlobalMouseMove);
+    window.removeEventListener('mouseup', handleGlobalMouseUp);
+    window.removeEventListener('touchmove', handleGlobalTouchMove);
+    window.removeEventListener('touchend', handleGlobalTouchEnd);
+  };
+}, [handleBoardMouseMove, handleBoardMouseUp, handleBoardTouchMove, handleBoardTouchEnd]);
+```
+
+### Scrollability Detection
+
+**Monitor board scrollability and update cursor accordingly**:
+
+```typescript
+useEffect(() => {
+  if (!boardContainerRef.current) return;
+  
+  const checkScrollable = () => {
+    if (!boardContainerRef.current) return;
+    const container = boardContainerRef.current;
+    const isScrollableX = container.scrollWidth > container.clientWidth;
+    const isScrollableY = container.scrollHeight > container.clientHeight;
+    setIsBoardScrollable(isScrollableX || isScrollableY);
+  };
+  
+  checkScrollable();
+  
+  // Check on resize and when items change
+  window.addEventListener('resize', checkScrollable);
+  const resizeObserver = new ResizeObserver(checkScrollable);
+  if (boardContainerRef.current) {
+    resizeObserver.observe(boardContainerRef.current);
+  }
+  
+  return () => {
+    window.removeEventListener('resize', checkScrollable);
+    resizeObserver.disconnect();
+  };
+}, [items]);
+```
+
+### Visual Feedback
+
+**Update cursor and user-select based on drag state**:
+
+```typescript
+<div 
+  ref={boardContainerRef}
+  className={containerClasses}
+  onMouseDown={handleBoardMouseDown}
+  onTouchStart={handleBoardTouchStart}
+  style={{ 
+    WebkitOverflowScrolling: 'touch',
+    cursor: isBoardDragging ? 'grabbing' : (isBoardScrollable ? 'grab' : 'default'),
+    userSelect: isBoardDragging ? 'none' : 'auto'
+  }}
+>
+  {/* Board content */}
+</div>
+```
+
+## Best Practices
+
+### 1. Always Check for Card Dragging
+
+**Before starting board drag, verify no card is being dragged**:
+
+```typescript
+if (draggedItemId) {
+  return; // Card is being dragged, don't start board drag
+}
+```
+
+### 2. Validate Scrollability
+
+**Only enable drag-to-scroll when board is scrollable**:
+
+```typescript
+const isScrollableX = container.scrollWidth > container.clientWidth;
+const isScrollableY = container.scrollHeight > container.clientHeight;
+
+if (!isScrollableX && !isScrollableY) {
+  return; // Not scrollable, don't enable
+}
+```
+
+### 3. Use Refs for Event Handlers
+
+**Refs provide synchronous access without re-renders**:
+
+```typescript
+// ✅ Good - ref for synchronous access
+const isBoardDraggingRef = useRef(false);
+
+// ❌ Bad - state causes re-renders on every mouse move
+const [isBoardDragging, setIsBoardDragging] = useState(false);
+```
+
+### 4. Combine Refs and State
+
+**Use refs for logic, state for UI updates**:
+
+```typescript
+// Ref for logic (no re-render needed)
+const isBoardDraggingRef = useRef(false);
+
+// State for UI (triggers re-render for cursor change)
+const [isBoardDragging, setIsBoardDragging] = useState(false);
+
+// Update both
+isBoardDraggingRef.current = true;
+setIsBoardDragging(true);
+```
+
+### 5. Prevent Default Scrolling
+
+**Use `preventDefault()` in touch handlers**:
+
+```typescript
+const handleBoardTouchMove = useCallback((e: TouchEvent) => {
+  // ...
+  e.preventDefault(); // Prevent default scrolling
+  // ...
+}, []);
+```
+
+### 6. Clean Up Event Listeners
+
+**Always remove event listeners in cleanup**:
+
+```typescript
+useEffect(() => {
+  window.addEventListener('mousemove', handleMouseMove);
+  
+  return () => {
+    window.removeEventListener('mousemove', handleMouseMove);
+  };
+}, [handleMouseMove]);
+```
+
+## Edge Cases
+
+### 1. Rapid Click-Drag
+
+**Distinguish between clicks and drags**:
+
+```typescript
+// Track if drag actually occurred
+const dragOccurredRef = useRef(false);
+
+// In mouse move handler
+if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+  dragOccurredRef.current = true;
+}
+
+// In mouse up handler
+if (!dragOccurredRef.current) {
+  // Handle as click, not drag
+}
+```
+
+### 2. Drag Outside Board
+
+**Handle dragging outside board boundaries**:
+
+```typescript
+const handleBoardMouseMove = useCallback((e: MouseEvent) => {
+  // Continue dragging even if mouse leaves board
+  // The global listener handles this
+}, []);
+```
+
+### 3. Multiple Touch Points
+
+**Only handle single touch point**:
+
+```typescript
+const handleBoardTouchStart = useCallback((e: React.TouchEvent) => {
+  if (e.touches.length !== 1) return; // Only single touch
+  // ...
+}, []);
+```
+
+### 4. Window Resize
+
+**Re-check scrollability on resize**:
+
+```typescript
+useEffect(() => {
+  const checkScrollable = () => {
+    // Re-check scrollability
+  };
+  
+  window.addEventListener('resize', checkScrollable);
+  const resizeObserver = new ResizeObserver(checkScrollable);
+  
+  return () => {
+    window.removeEventListener('resize', checkScrollable);
+    resizeObserver.disconnect();
+  };
+}, []);
+```
+
+## Performance Considerations
+
+### 1. Use `useCallback` for Handlers
+
+**Memoize event handlers to prevent unnecessary re-renders**:
+
+```typescript
+const handleBoardMouseDown = useCallback((e: React.MouseEvent) => {
+  // Handler logic
+}, [dependencies]);
+```
+
+### 2. Use Refs for Frequent Updates
+
+**Refs don't trigger re-renders, use them for frequent state**:
+
+```typescript
+// ✅ Good - no re-render
+isBoardDraggingRef.current = true;
+
+// ❌ Bad - triggers re-render on every mouse move
+setIsBoardDragging(true);
+```
+
+### 3. Debounce Scrollability Checks
+
+**Only check scrollability when needed**:
+
+```typescript
+// Check on mount, resize, and items change
+useEffect(() => {
+  checkScrollable();
+}, [items]); // Only when items change
+```
+
+## Accessibility
+
+### 1. Keyboard Navigation
+
+**Ensure keyboard navigation still works**:
+
+```typescript
+// Board drag doesn't interfere with keyboard navigation
+// Cards remain keyboard accessible
+```
+
+### 2. Screen Readers
+
+**Maintain proper ARIA attributes**:
+
+```typescript
+// Cards maintain draggable attributes
+<div draggable={!isMobile && enableDragAndDrop}>
+  {/* Card content */}
+</div>
+```
+
+## Testing Checklist
+
+When implementing or modifying the drag system:
+
+- [ ] Board drag works when clicking on background
+- [ ] Board drag doesn't activate when clicking on cards
+- [ ] Board drag doesn't activate when clicking on buttons/links
+- [ ] Card dragging still works normally
+- [ ] Board drag and card drag don't conflict
+- [ ] Cursor changes appropriately (grab → grabbing)
+- [ ] Touch events work on mobile/tablet
+- [ ] Scrollability detection works correctly
+- [ ] Window resize updates scrollability
+- [ ] Event listeners are properly cleaned up
+- [ ] No memory leaks from event listeners
+- [ ] Performance is smooth (60fps)
+
+## Common Issues
+
+### Issue: Board drag doesn't work
+
+**Solution**: Check that:
+1. Board is actually scrollable (`scrollWidth > clientWidth`)
+2. Click target is not a card or interactive element
+3. No card is currently being dragged
+
+### Issue: Card drag conflicts with board drag
+
+**Solution**: Ensure board drag checks for `draggedItemId`:
+
+```typescript
+if (draggedItemId) {
+  return; // Don't start board drag
+}
+```
+
+### Issue: Cursor doesn't update
+
+**Solution**: Use state for cursor updates, not just refs:
+
+```typescript
+const [isBoardDragging, setIsBoardDragging] = useState(false);
+// Update both ref and state
+isBoardDraggingRef.current = true;
+setIsBoardDragging(true);
+```
+
+### Issue: Touch events don't work
+
+**Solution**: Ensure `preventDefault()` is called in touch handlers:
+
+```typescript
+const handleBoardTouchMove = useCallback((e: TouchEvent) => {
+  e.preventDefault(); // Required for touch drag
+  // ...
+}, []);
+```
+
+## Summary
+
+The kanban board drag system requires:
+
+1. **Element-based detection** - Only drag board when clicking background
+2. **Coexistence checks** - Don't interfere with card dragging
+3. **Scrollability validation** - Only enable when scrollable
+4. **Refs + State** - Refs for logic, state for UI updates
+5. **Global listeners** - Attach to window for smooth dragging
+6. **Touch support** - Full mobile/tablet compatibility
+7. **Visual feedback** - Cursor and user-select updates
+8. **Proper cleanup** - Remove event listeners on unmount
+
+This approach allows smooth board scrolling while maintaining full card drag-and-drop functionality.

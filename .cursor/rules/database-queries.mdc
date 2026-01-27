@@ -1,0 +1,526 @@
+---
+description: Standards and patterns for database queries using Supabase. Covers client selection, RLS policies, error handling, and query optimization.
+globs: "lib/database/**/*.ts,app/api/**/*.ts"
+alwaysApply: false
+---
+
+# Database Queries Standards
+
+## Client Selection
+
+### 1. User-Scoped Operations
+
+**ALWAYS** use `createClient()` for user-scoped operations:
+```typescript
+import { createClient } from '@/lib/database/client';
+
+export async function getUserBuckets(userId: string) {
+  const supabase = await createClient();
+  
+  const { data, error } = await supabase
+    .from('buckets')
+    .select('*')
+    .eq('user_id', userId);
+    
+  if (error) throw error;
+  return data;
+}
+```
+
+### 2. Admin Operations
+
+**ONLY** use `getSupabaseAdmin()` for admin operations:
+```typescript
+import { getSupabaseAdmin } from '@/lib/database/client';
+
+export async function getAllUsers() {
+  const supabase = getSupabaseAdmin();
+  
+  const { data, error } = await supabase
+    .from('users')
+    .select('*');
+    
+  if (error) throw error;
+  return data;
+}
+```
+
+**When to use admin client**:
+- System-level operations
+- Bypassing RLS for admin tasks
+- Background jobs
+- Webhook handlers (when appropriate)
+
+## Query Patterns
+
+### 1. Select Queries
+
+**ALWAYS** use explicit column selection:
+```typescript
+// ✅ Good - explicit columns
+const { data } = await supabase
+  .from('buckets')
+  .select('id, name, created_at, user_id');
+
+// ❌ Bad - select all
+const { data } = await supabase
+  .from('buckets')
+  .select('*');
+```
+
+### 2. Single Row Queries
+
+**Use `.single()` when expecting one result**:
+```typescript
+const { data, error } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', bucketId)
+  .single();
+
+if (error) {
+  if (error.code === 'PGRST116') {
+    // No rows returned
+    return null;
+  }
+  throw error;
+}
+
+return data;
+```
+
+**Use `.maybeSingle()` when result may not exist**:
+```typescript
+const { data, error } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', bucketId)
+  .maybeSingle();
+
+if (error) throw error;
+return data; // null if not found
+```
+
+### 3. Filtering
+
+**Use appropriate filter methods**:
+```typescript
+// Equality
+.eq('status', 'active')
+
+// Not equal
+.neq('status', 'deleted')
+
+// In array
+.in('id', [id1, id2, id3])
+
+// Greater than / Less than
+.gt('created_at', date)
+.lt('created_at', date)
+
+// Like (case-sensitive)
+.like('name', '%search%')
+
+// ILike (case-insensitive)
+.ilike('name', '%search%')
+
+// Is null
+.is('deleted_at', null)
+
+// Is not null
+.not('deleted_at', 'is', null)
+```
+
+### 4. Sorting
+
+**Use `.order()` for sorting**:
+```typescript
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .order('created_at', { ascending: false })
+  .order('name', { ascending: true }); // Secondary sort
+```
+
+### 5. Pagination
+
+**Use `.range()` for pagination**:
+```typescript
+const page = 1;
+const limit = 20;
+const offset = (page - 1) * limit;
+
+const { data, count } = await supabase
+  .from('buckets')
+  .select('*', { count: 'exact' })
+  .range(offset, offset + limit - 1);
+
+return {
+  data,
+  total: count,
+  page,
+  limit
+};
+```
+
+### 6. Joins
+
+**Use foreign key relationships**:
+```typescript
+// Select related data
+const { data } = await supabase
+  .from('buckets')
+  .select(`
+    *,
+    bucket_members (
+      user_id,
+      role
+    )
+  `);
+
+// Filter by related data
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('bucket_members.user_id', userId);
+```
+
+## Error Handling
+
+### 1. Standard Error Handling
+
+**ALWAYS** handle database errors:
+```typescript
+import { handleDatabaseError } from '@/lib/api/errors';
+
+const { data, error } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', bucketId)
+  .single();
+
+if (error) {
+  const { userMessage, shouldRetry, isConstraintError } = handleDatabaseError(
+    error,
+    'fetch bucket'
+  );
+  
+  if (isConstraintError) {
+    // Handle constraint violation
+  }
+  
+  throw new Error(userMessage);
+}
+
+return data;
+```
+
+### 2. Common Error Codes
+
+**Handle common Supabase error codes**:
+```typescript
+if (error) {
+  switch (error.code) {
+    case 'PGRST116':
+      // No rows returned
+      return null;
+    case '23505':
+      // Unique constraint violation
+      throw new Error('Record already exists');
+    case '23503':
+      // Foreign key violation
+      throw new Error('Referenced record does not exist');
+    case '42P01':
+      // Table does not exist
+      throw new Error('Database table not found');
+    default:
+      throw error;
+  }
+}
+```
+
+## Insert Operations
+
+### 1. Single Insert
+
+```typescript
+const { data, error } = await supabase
+  .from('buckets')
+  .insert({
+    name: 'My Bucket',
+    user_id: userId,
+    created_at: new Date().toISOString()
+  })
+  .select()
+  .single();
+
+if (error) throw error;
+return data;
+```
+
+### 2. Bulk Insert
+
+```typescript
+const items = [
+  { name: 'Item 1', bucket_id: bucketId },
+  { name: 'Item 2', bucket_id: bucketId }
+];
+
+const { data, error } = await supabase
+  .from('items')
+  .insert(items)
+  .select();
+
+if (error) throw error;
+return data;
+```
+
+## Update Operations
+
+### 1. Single Update
+
+```typescript
+const { data, error } = await supabase
+  .from('buckets')
+  .update({
+    name: 'Updated Name',
+    updated_at: new Date().toISOString()
+  })
+  .eq('id', bucketId)
+  .select()
+  .single();
+
+if (error) throw error;
+return data;
+```
+
+### 2. Conditional Update
+
+```typescript
+const { data, error } = await supabase
+  .from('buckets')
+  .update({ status: 'archived' })
+  .eq('id', bucketId)
+  .eq('user_id', userId) // Ensure ownership
+  .select()
+  .single();
+
+if (error) throw error;
+if (!data) {
+  throw new Error('Bucket not found or access denied');
+}
+return data;
+```
+
+## Delete Operations
+
+### 1. Soft Delete
+
+**Prefer soft deletes** (update `deleted_at`):
+```typescript
+const { data, error } = await supabase
+  .from('buckets')
+  .update({ deleted_at: new Date().toISOString() })
+  .eq('id', bucketId)
+  .select()
+  .single();
+
+if (error) throw error;
+return data;
+```
+
+### 2. Hard Delete
+
+**Only use hard deletes when necessary**:
+```typescript
+const { error } = await supabase
+  .from('buckets')
+  .delete()
+  .eq('id', bucketId);
+
+if (error) throw error;
+```
+
+## Transactions
+
+**⚠️ IMPORTANT**: For comprehensive ACID compliance guidance, see **[ACID Compliance Standards](./acid-compliance.mdc)**.
+
+### 1. Using Transactions
+
+**Use transactions for multi-step operations**:
+```typescript
+// Note: Supabase doesn't have explicit transactions in JS client
+// Use RPC functions for complex transactions
+
+const { data, error } = await supabase.rpc('create_bucket_with_items', {
+  bucket_name: 'My Bucket',
+  items: ['Item 1', 'Item 2']
+});
+
+if (error) throw error;
+return data;
+```
+
+**Quick Reference**:
+- ✅ **Use RPC functions** for multi-table operations requiring ACID compliance
+- ✅ **Use Python transactions** for background workers
+- ⚠️ **Supabase JS client** does NOT support explicit transactions
+- ❌ **Never assume** sequential operations are atomic
+
+See **[ACID Compliance Standards](./acid-compliance.mdc)** for detailed patterns and examples.
+
+## RLS (Row Level Security)
+
+### 1. Understanding RLS
+
+**RLS policies are enforced automatically** when using `createClient()`:
+```typescript
+// This query automatically respects RLS policies
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('user_id', userId); // RLS ensures user can only see their buckets
+```
+
+### 2. Testing RLS
+
+**Verify RLS policies work correctly**:
+```typescript
+// Test that users can't access other users' data
+const { data, error } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', otherUserBucketId);
+
+// Should return empty or error if RLS is working
+```
+
+## UUID Validation
+
+### 1. Validate UUIDs
+
+**ALWAYS** validate UUIDs before queries:
+```typescript
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', isValidUUID(bucketId) ? bucketId : 'invalid');
+```
+
+## JSONB Operations
+
+### 1. Querying JSONB
+
+```typescript
+// Access JSONB fields
+const { data } = await supabase
+  .from('documents')
+  .select('metadata->tags')
+  .eq('metadata->>status', 'active');
+
+// Update JSONB
+const { data } = await supabase
+  .from('documents')
+  .update({
+    metadata: {
+      ...existingMetadata,
+      newField: 'value'
+    }
+  })
+  .eq('id', documentId);
+```
+
+## Performance Optimization
+
+### 1. Index Usage
+
+**Ensure queries use indexes**:
+```typescript
+// This query should use an index on user_id
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('user_id', userId); // Indexed column
+```
+
+### 2. Limit Results
+
+**Always limit large result sets**:
+```typescript
+const { data } = await supabase
+  .from('documents')
+  .select('*')
+  .eq('bucket_id', bucketId)
+  .limit(100); // Prevent large result sets
+```
+
+### 3. Count Queries
+
+**Use count efficiently**:
+```typescript
+// Get count without fetching data
+const { count } = await supabase
+  .from('buckets')
+  .select('*', { count: 'exact', head: true })
+  .eq('user_id', userId);
+```
+
+## TypeScript Types
+
+### 1. Database Types
+
+**Use types from `lib/database/types/`**:
+```typescript
+import type { Bucket, Document } from '@/lib/database/types';
+
+const { data } = await supabase
+  .from('buckets')
+  .select('*')
+  .eq('id', bucketId)
+  .single();
+
+const bucket = data as Bucket;
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Use `createClient()` for user operations
+- ✅ Use `getSupabaseAdmin()` only for admin operations
+- ✅ Select explicit columns
+- ✅ Handle errors properly
+- ✅ Validate UUIDs before queries
+- ✅ Use `.single()` or `.maybeSingle()` appropriately
+- ✅ Use transactions for multi-step operations
+- ✅ Respect RLS policies
+- ✅ Limit large result sets
+- ✅ Use indexes for filtering
+
+### DON'T:
+- ❌ Use admin client for user operations
+- ❌ Select `*` unnecessarily
+- ❌ Skip error handling
+- ❌ Ignore RLS policies
+- ❌ Query without limits
+- ❌ Use hard deletes when soft deletes are appropriate
+- ❌ Skip UUID validation
+- ❌ Expose sensitive data
+- ❌ Use synchronous operations for I/O
+
+## Query Checklist
+
+Before writing a query, ensure:
+- [ ] Correct client selected (user vs admin)
+- [ ] Explicit column selection
+- [ ] Proper error handling
+- [ ] UUID validation (if applicable)
+- [ ] RLS policy consideration
+- [ ] Appropriate use of `.single()` or `.maybeSingle()`
+- [ ] Result set limits for large queries
+- [ ] TypeScript types used
+- [ ] Index usage considered

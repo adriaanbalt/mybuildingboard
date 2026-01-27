@@ -1,0 +1,401 @@
+---
+description: Standards and patterns for custom React hooks. Covers data fetching, state management, error handling, and hook composition.
+globs: "lib/hooks/**/*.ts"
+alwaysApply: false
+---
+
+# Custom Hooks Standards
+
+## Hook Naming
+
+### 1. Naming Convention
+
+**ALWAYS** prefix hook names with `use`:
+```typescript
+// ✅ Good
+export function useAnalytics() { }
+export function useBuckets() { }
+export function useDefaultBucket() { }
+
+// ❌ Bad
+export function analytics() { }
+export function getBuckets() { }
+```
+
+### 2. Descriptive Names
+
+**Use descriptive names** that indicate purpose:
+```typescript
+// ✅ Good
+useDefaultBucketFromShared()
+useSharedBuckets()
+useSubscriptionStatus()
+
+// ❌ Bad
+useBucket()
+useData()
+useStatus()
+```
+
+## Hook Structure
+
+### 1. Return Value Pattern
+
+**ALWAYS** return a consistent object structure:
+```typescript
+interface UseHookReturn {
+  data: DataType | null;
+  loading: boolean;
+  error: string | null;
+  refetch?: () => void;
+}
+
+export function useHook(): UseHookReturn {
+  const [data, setData] = useState<DataType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  return {
+    data,
+    loading,
+    error,
+    refetch: fetchData
+  };
+}
+```
+
+### 2. State Management
+
+**Use `useState` for local state**:
+```typescript
+import { useState } from 'react';
+
+export function useHook() {
+  const [data, setData] = useState<DataType | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Hook logic
+}
+```
+
+### 3. Async Operations
+
+**Use `useEffect` and `useCallback` for async operations**:
+```typescript
+import { useState, useEffect, useCallback } from 'react';
+
+export function useAnalytics(filters: AnalyticsFilters) {
+  const [data, setData] = useState<AnalyticsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAnalytics = useCallback(async () => {
+    if (!filters.bucketId) {
+      setError('Bucket ID is required');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await authenticatedFetch(url, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const analyticsData = await safeJsonParse(response, { method: 'GET', url });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setError('Authentication required. Please log in again.');
+        } else {
+          const errorData = analyticsData as { error?: string };
+          setError(errorData.error || 'Failed to fetch analytics data');
+        }
+        return;
+      }
+      
+      setData(analyticsData as AnalyticsData);
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch analytics data');
+    } finally {
+      setLoading(false);
+    }
+  }, [filters.timeRange, filters.bucketId]);
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
+
+  return {
+    data,
+    loading,
+    error,
+    refetch: fetchAnalytics
+  };
+}
+```
+
+## Data Fetching Patterns
+
+### 1. Using authenticatedFetch
+
+**ALWAYS** use `authenticatedFetch` for API calls:
+```typescript
+import { authenticatedFetch, safeJsonParse } from '@/lib/api/client';
+
+const response = await authenticatedFetch(url, {
+  method: 'GET',
+  headers: { 'Content-Type': 'application/json' }
+});
+
+const data = await safeJsonParse(response, { method: 'GET', url });
+```
+
+### 2. Error Handling
+
+**Handle errors gracefully**:
+```typescript
+try {
+  const response = await authenticatedFetch(url);
+  const data = await safeJsonParse(response);
+  
+  if (!response.ok) {
+    if (response.status === 401) {
+      setError('Authentication required');
+      // Don't redirect - ProtectedRoute handles it
+    } else {
+      const errorData = data as { error?: string };
+      setError(errorData.error || 'Request failed');
+    }
+    return;
+  }
+  
+  setData(data);
+} catch (err) {
+  console.error('Error:', err);
+  setError(err instanceof Error ? err.message : 'An error occurred');
+} finally {
+  setLoading(false);
+}
+```
+
+### 3. Parameter Validation
+
+**Validate required parameters**:
+```typescript
+export function useHook(params: HookParams) {
+  const fetchData = useCallback(async () => {
+    if (!params.requiredId) {
+      setError('Required ID is missing');
+      setLoading(false);
+      return;
+    }
+    
+    // Fetch data
+  }, [params.requiredId]);
+}
+```
+
+## Shared Hooks Pattern
+
+### 1. Shared Data Hooks
+
+**Use `useShared*` pattern** for shared state:
+```typescript
+// lib/hooks/useSharedBuckets.ts
+export function useSharedBuckets() {
+  // Shared state management
+}
+
+export function useDefaultBucketFromShared() {
+  // Derived from shared state
+}
+```
+
+### 2. Hook Composition
+
+**Compose hooks** for complex logic:
+```typescript
+export function useDashboardData() {
+  const { bucketId } = useDefaultBucketFromShared();
+  const { data: analytics } = useAnalytics({ bucketId });
+  const { data: documents } = useDocuments({ bucketId });
+  
+  return {
+    bucketId,
+    analytics,
+    documents,
+    loading: analytics.loading || documents.loading
+  };
+}
+```
+
+## Dependency Management
+
+### 1. useCallback Dependencies
+
+**Include all dependencies** in `useCallback`:
+```typescript
+const fetchData = useCallback(async () => {
+  // Uses: filters.timeRange, filters.bucketId
+}, [filters.timeRange, filters.bucketId]);
+```
+
+### 2. useEffect Dependencies
+
+**Include callback in dependencies**:
+```typescript
+useEffect(() => {
+  fetchData();
+}, [fetchData]); // fetchData is memoized with useCallback
+```
+
+## Loading States
+
+### 1. Initial Loading
+
+**Start with `loading: true`**:
+```typescript
+const [loading, setLoading] = useState(true);
+```
+
+### 2. Loading During Refetch
+
+**Set loading during refetch**:
+```typescript
+const refetch = useCallback(async () => {
+  setLoading(true);
+  // Fetch data
+  setLoading(false);
+}, []);
+```
+
+## Error States
+
+### 1. Error Messages
+
+**Provide user-friendly error messages**:
+```typescript
+if (response.status === 401) {
+  setError('Authentication required. Please log in again.');
+} else if (response.status === 403) {
+  setError('You do not have permission to access this resource.');
+} else if (response.status === 404) {
+  setError('Resource not found.');
+} else {
+  setError('An unexpected error occurred. Please try again.');
+}
+```
+
+### 2. Error Recovery
+
+**Provide refetch mechanism**:
+```typescript
+return {
+  data,
+  loading,
+  error,
+  refetch: fetchData // Allow user to retry
+};
+```
+
+## TypeScript Types
+
+### 1. Hook Parameters
+
+**Define parameter types**:
+```typescript
+interface UseAnalyticsParams {
+  timeRange: '7d' | '30d' | '90d' | '1y';
+  bucketId?: string;
+}
+
+export function useAnalytics(params: UseAnalyticsParams) {
+  // Hook implementation
+}
+```
+
+### 2. Return Types
+
+**Define return types**:
+```typescript
+interface UseAnalyticsReturn {
+  data: AnalyticsData | null;
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+export function useAnalytics(params: UseAnalyticsParams): UseAnalyticsReturn {
+  // Hook implementation
+}
+```
+
+## Documentation
+
+### 1. JSDoc Comments
+
+**Document hooks with JSDoc**:
+```typescript
+/**
+ * Fetches analytics data for a bucket
+ * 
+ * @param filters - Analytics filters including time range and bucket ID
+ * @returns Object containing analytics data, loading state, error, and refetch function
+ * 
+ * @example
+ * ```tsx
+ * const { data, loading, error } = useAnalytics({
+ *   timeRange: '30d',
+ *   bucketId: 'bucket-id'
+ * });
+ * ```
+ */
+export function useAnalytics(filters: AnalyticsFilters): UseAnalyticsReturn {
+  // Implementation
+}
+```
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ Prefix hook names with `use`
+- ✅ Return consistent object structure
+- ✅ Use `useState` for local state
+- ✅ Use `useCallback` for memoized functions
+- ✅ Use `useEffect` for side effects
+- ✅ Handle loading and error states
+- ✅ Validate required parameters
+- ✅ Use `authenticatedFetch` for API calls
+- ✅ Provide refetch mechanism
+- ✅ Document hooks with JSDoc
+
+### DON'T:
+- ❌ Skip the `use` prefix
+- ❌ Return inconsistent structures
+- ❌ Skip error handling
+- ❌ Skip loading states
+- ❌ Use `any` types
+- ❌ Skip parameter validation
+- ❌ Create hooks without TypeScript types
+- ❌ Forget dependencies in `useCallback`/`useEffect`
+- ❌ Expose internal implementation details
+
+## Hook Checklist
+
+Before creating a hook, ensure:
+- [ ] Hook name starts with `use`
+- [ ] TypeScript types for parameters and return value
+- [ ] Consistent return structure
+- [ ] Loading state handling
+- [ ] Error state handling
+- [ ] Parameter validation
+- [ ] Proper dependency arrays
+- [ ] JSDoc documentation
+- [ ] Uses `authenticatedFetch` for API calls
+- [ ] Provides refetch mechanism

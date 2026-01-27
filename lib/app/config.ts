@@ -1,12 +1,11 @@
 /**
  * App Configuration System
- * 
+ *
  * Loads and caches app configuration from database.
  */
 
-import { createServerSupabaseClient } from '@/lib/auth/client';
-import { NotFoundError } from '@/lib/errors';
-import type { App, AppConfig, AppWithConfig } from './types';
+import { createServerSupabaseClient } from '@/lib/auth/server'
+import type { App, AppConfig, AppWithConfig } from './types'
 
 /**
  * In-memory cache for app configs
@@ -15,53 +14,49 @@ import type { App, AppConfig, AppWithConfig } from './types';
 const configCache = new Map<
   string,
   {
-    app: App;
-    config: AppConfig['config'] | null;
-    timestamp: number;
+    app: App
+    config: AppConfig['config'] | null
+    timestamp: number
   }
->();
+>()
 
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 /**
  * Load app from database
  */
 async function loadAppFromDatabase(appId: string): Promise<App | null> {
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from('apps')
-    .select('*')
-    .eq('id', appId)
-    .single();
+  const supabase = await createServerSupabaseClient()
+  const { data, error } = await supabase.from('apps').select('*').eq('id', appId).single()
 
   if (error || !data) {
-    return null;
+    return null
   }
 
-  return data as App;
+  return data as App
 }
 
 /**
  * Load app config from database
  */
 async function loadAppConfigFromDatabase(appId: string): Promise<AppConfig['config'] | null> {
-  const supabase = await createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient()
   const { data, error } = await supabase
     .from('app_configs')
     .select('config')
     .eq('app_id', appId)
-    .single();
+    .single()
 
   if (error || !data) {
-    return null;
+    return null
   }
 
-  return data.config;
+  return data.config
 }
 
 /**
  * Get app configuration (with caching)
- * 
+ *
  * @param appId - App ID
  * @param useCache - Whether to use cache (default: true)
  * @returns App with config or null if not found
@@ -72,22 +67,22 @@ export async function getAppConfig(
 ): Promise<AppWithConfig | null> {
   // Check cache first
   if (useCache) {
-    const cached = configCache.get(appId);
+    const cached = configCache.get(appId)
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return {
         ...cached.app,
         config: cached.config,
-      };
+      }
     }
   }
 
   // Load from database
-  const app = await loadAppFromDatabase(appId);
+  const app = await loadAppFromDatabase(appId)
   if (!app) {
-    return null;
+    return null
   }
 
-  const config = await loadAppConfigFromDatabase(appId);
+  const config = await loadAppConfigFromDatabase(appId)
 
   // Update cache
   if (useCache) {
@@ -95,36 +90,36 @@ export async function getAppConfig(
       app,
       config,
       timestamp: Date.now(),
-    });
+    })
   }
 
   return {
     ...app,
     config: config || {},
-  };
+  }
 }
 
 /**
  * Invalidate app config cache
  */
 export function invalidateAppConfigCache(appId: string): void {
-  configCache.delete(appId);
+  configCache.delete(appId)
 }
 
 /**
  * Clear all app config cache
  */
 export function clearAppConfigCache(): void {
-  configCache.clear();
+  configCache.clear()
 }
 
 /**
  * Get app by ID (without config)
  */
 export async function getApp(appId: string): Promise<App | null> {
-  const appConfig = await getAppConfig(appId);
+  const appConfig = await getAppConfig(appId)
   if (!appConfig) {
-    return null;
+    return null
   }
 
   return {
@@ -133,5 +128,5 @@ export async function getApp(appId: string): Promise<App | null> {
     subdomain: appConfig.subdomain,
     created_at: appConfig.created_at,
     updated_at: appConfig.updated_at,
-  };
+  }
 }

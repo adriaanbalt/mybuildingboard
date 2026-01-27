@@ -1,0 +1,653 @@
+---
+description: Standards and guidance for Supabase migrations. Covers when to run migrations, detecting database resets, verifying database objects, and ensuring migrations are complete before proceeding.
+globs: "supabase/migrations/**/*.sql,infrastructure/supabase/migrations/**/*.sql,app/api/**/*.ts,lib/database/**/*.ts"
+alwaysApply: false
+---
+
+# Supabase Migrations Standards
+
+## When Migrations Are Needed
+
+### 1. Code Changes Requiring Database Changes
+
+**Migrations are needed when**:
+- Creating new database tables, columns, or constraints
+- Modifying existing table schemas
+- Adding or updating RLS policies
+- Creating or modifying database functions
+- Adding or updating triggers
+- Creating or modifying indexes
+- Changing database types or enums
+
+**Example scenarios**:
+```typescript
+// ✅ Code change that requires migration
+// New table reference in code
+const { data } = await supabase
+  .from('new_table_name')  // This table needs to exist
+  .select('*');
+
+// ✅ Code change that requires migration
+// New column reference
+const { data } = await supabase
+  .from('buckets')
+  .select('id, name, new_column')  // new_column needs to exist
+```
+
+### 2. Detecting Migration Needs
+
+**Before proceeding with code that uses database changes**:
+1. Check if migration files exist for the changes
+2. Verify migrations have been applied to the database
+3. Ensure all referenced tables/columns exist
+
+**Commands to check migration status**:
+```bash
+# Check pending migrations (local)
+supabase migration list
+
+# Check database diff (local)
+supabase db diff
+
+# Verify migration status (production)
+supabase db remote commit
+```
+
+## Running Migrations
+
+### 1. Local Development
+
+**When Supabase is running locally**:
+```bash
+# Apply all pending migrations
+supabase migration up
+
+# Or reset and apply all migrations (destructive)
+supabase db reset
+```
+
+**After creating a new migration file**:
+1. Ensure the migration SQL is complete and valid
+2. Run `supabase migration up` to apply it
+3. Verify the migration succeeded
+4. Test the code changes that depend on it
+
+**CRITICAL: Post-Startup Migration Verification**
+
+**Problem**: Supabase restores from Docker volume backups on startup, which may not include all migrations. Migration files may exist but not be applied to the database schema.
+
+**Solution**: Always verify and apply migrations after Supabase starts:
+
+```bash
+# Automatic verification (recommended - built into startup scripts)
+yarn supabase:start  # Automatically verifies migrations after start
+
+# Manual verification
+yarn supabase:migrate
+# Or
+./scripts/utils/supabase/verify-and-apply-migrations.sh
+
+# Health check
+yarn supabase:migrate:health
+# Or
+./scripts/utils/supabase/check-migration-health.sh
+```
+
+**When to verify**:
+- After `supabase start`
+- After `supabase stop && supabase start`
+- After restoring from backup
+- When encountering "column not found" or "table not found" errors
+- Before running code that uses database objects
+
+**Verification checklist**:
+- [ ] Run `supabase migration up` to apply pending migrations
+- [ ] Verify critical columns/tables exist
+- [ ] Check `supabase migration list` shows all migrations applied
+- [ ] Test database operations that use new schema
+
+**Automated verification**: All startup scripts (`start-supabase-local.sh`, `start-supabase-https.sh`, `start-dev/start.sh`) automatically verify and apply migrations after Supabase starts.
+
+### 2. Production Deployment
+
+**When deploying to production**:
+```bash
+# Push migrations to remote database
+supabase db push --db-url "$SUPABASE_DB_URL"
+
+# Or use the deployment script
+./scripts/deploy/deploy-supabase-db.sh
+```
+
+**Before deploying**:
+1. Test migrations locally first
+2. Verify all migrations are in `supabase/migrations/`
+3. Check for any breaking changes
+4. Ensure rollback plan exists if needed
+
+## Detecting Database Reset/Clear
+
+### 1. Signs That Supabase Was Reset
+
+**Indicators**:
+- Tables referenced in code don't exist
+- RLS policies are missing
+- Database functions return "does not exist" errors
+- Triggers are not firing
+- Indexes are missing
+
+**Detection methods**:
+```bash
+# Check if tables exist
+supabase db diff
+
+# List all tables
+psql "$SUPABASE_DB_URL" -c "\dt"
+
+# Check migration status
+supabase migration list
+```
+
+### 2. Verification Checklist
+
+**After detecting a reset, verify**:
+- [ ] All expected tables exist
+- [ ] All RLS policies are applied
+- [ ] All triggers are created
+- [ ] All functions are defined
+- [ ] All indexes are present
+- [ ] All constraints are in place
+- [ ] All enums/types are defined
+
+## Verifying Database Objects
+
+### 1. Tables
+
+**Verify tables exist**:
+```sql
+-- Check if table exists
+SELECT EXISTS (
+  SELECT FROM information_schema.tables 
+  WHERE table_schema = 'public' 
+  AND table_name = 'table_name'
+);
+
+-- List all tables
+SELECT table_name 
+FROM information_schema.tables 
+WHERE table_schema = 'public'
+ORDER BY table_name;
+```
+
+**Compare against migration files**:
+- Check `supabase/migrations/` for all `CREATE TABLE` statements
+- Verify each table exists in the database
+- Check for any missing tables
+
+### 2. RLS Policies
+
+**Verify RLS policies exist**:
+```sql
+-- List all RLS policies
+SELECT 
+  schemaname,
+  tablename,
+  policyname,
+  permissive,
+  roles,
+  cmd,
+  qual
+FROM pg_policies
+WHERE schemaname = 'public'
+ORDER BY tablename, policyname;
+```
+
+**Check RLS is enabled**:
+```sql
+-- Check if RLS is enabled on a table
+SELECT tablename, rowsecurity 
+FROM pg_tables 
+WHERE schemaname = 'public' 
+AND tablename = 'table_name';
+```
+
+### 3. Triggers
+
+**Verify triggers exist**:
+```sql
+-- List all triggers
+SELECT 
+  trigger_name,
+  event_manipulation,
+  event_object_table,
+  action_statement
+FROM information_schema.triggers
+WHERE trigger_schema = 'public'
+ORDER BY event_object_table, trigger_name;
+```
+
+### 4. Functions
+
+**Verify functions exist**:
+```sql
+-- List all functions
+SELECT 
+  routine_name,
+  routine_type,
+  data_type
+FROM information_schema.routines
+WHERE routine_schema = 'public'
+ORDER BY routine_name;
+```
+
+### 5. Indexes
+
+**Verify indexes exist**:
+```sql
+-- List all indexes
+SELECT 
+  tablename,
+  indexname,
+  indexdef
+FROM pg_indexes
+WHERE schemaname = 'public'
+ORDER BY tablename, indexname;
+```
+
+## Migration Workflow
+
+### 1. Creating a Migration
+
+**When code changes require database changes**:
+
+1. **Generate unique timestamp**:
+   ```bash
+   # ALWAYS generate a unique timestamp for new migrations
+   date +%Y%m%d%H%M%S
+   # Example output: 20251129000406
+   ```
+
+2. **Check for duplicate timestamps BEFORE creating migration**:
+   ```bash
+   # Check for duplicate timestamps (should return nothing)
+   ls -1 supabase/migrations/*.sql | xargs -n1 basename | cut -d'_' -f1 | sort | uniq -d
+   
+   # If duplicates found, fix them before proceeding
+   ```
+
+3. **Create the migration file**:
+   ```bash
+   # Option A: Use Supabase CLI (recommended - generates unique timestamp)
+   supabase migration new migration_name
+   
+   # Option B: Create manually with unique timestamp
+   # File: supabase/migrations/YYYYMMDDHHMMSS_migration_name.sql
+   # Use the timestamp from step 1
+   ```
+
+4. **Validate migration file**:
+   ```bash
+   # Check for duplicate timestamps after creating
+   ./scripts/utils/validate-migrations.sh
+   
+   # Or manually check
+   ls -1 supabase/migrations/*.sql | xargs -n1 basename | cut -d'_' -f1 | sort | uniq -d
+   ```
+
+2. **Write complete migration SQL**:
+   ```sql
+   -- Example: Create table with all necessary components
+   CREATE TABLE IF NOT EXISTS new_table (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     name TEXT NOT NULL,
+     created_at TIMESTAMPTZ DEFAULT NOW(),
+     updated_at TIMESTAMPTZ DEFAULT NOW()
+   );
+
+   -- Add RLS
+   ALTER TABLE new_table ENABLE ROW LEVEL SECURITY;
+
+   -- Create policies
+   CREATE POLICY "Users can view own records"
+     ON new_table FOR SELECT
+     USING (auth.uid() = user_id);
+
+   -- Create indexes
+   CREATE INDEX IF NOT EXISTS idx_new_table_user_id 
+     ON new_table(user_id);
+
+   -- Create triggers if needed
+   CREATE TRIGGER update_updated_at
+     BEFORE UPDATE ON new_table
+     FOR EACH ROW
+     EXECUTE FUNCTION update_updated_at_column();
+   ```
+
+3. **Ensure migration is complete**:
+   - All SQL statements are valid
+   - No syntax errors
+   - All referenced objects are created
+   - Dependencies are handled (e.g., functions before triggers)
+
+### 2. Validating Migrations
+
+**CRITICAL: Before applying migrations, ALWAYS validate**:
+
+1. **Check for duplicate timestamps**:
+   ```bash
+   # Run validation script
+   ./scripts/utils/validate-migrations.sh
+   
+   # Or manually check
+   ls -1 supabase/migrations/*.sql | xargs -n1 basename | cut -d'_' -f1 | sort | uniq -d
+   ```
+   
+   **If duplicates found:**
+   - ❌ **STOP** - Do not proceed
+   - Fix duplicate timestamps by renaming one migration
+   - Use `git mv` to preserve history
+   - Re-run validation
+
+2. **Check migration list for conflicts**:
+   ```bash
+   supabase migration list
+   ```
+   
+   **Look for:**
+   - Duplicate timestamps in the output
+   - Migrations marked as "pending" that should be applied
+   - Any error messages
+
+3. **Verify migration file format**:
+   - ✅ Timestamp format: `YYYYMMDDHHMMSS` (14 digits)
+   - ✅ Descriptive name after underscore
+   - ✅ `.sql` extension
+   - ✅ No special characters in filename
+
+### 3. Applying Migrations
+
+**Before applying**:
+- [ ] **CRITICAL**: No duplicate timestamps (run validation script)
+- [ ] Migration file is complete and valid
+- [ ] All SQL syntax is correct
+- [ ] Dependencies are in order
+- [ ] No conflicts with existing schema
+- [ ] Migration list shows no duplicates
+
+**Apply migration**:
+```bash
+# Local development
+supabase migration up
+
+# Verify it applied
+supabase migration list
+```
+
+**After applying**:
+- [ ] Verify tables/columns exist
+- [ ] Test code that uses the changes
+- [ ] Check for any errors in logs
+- [ ] Verify RLS policies work correctly
+
+### 4. Handling Reset/Clear Scenarios
+
+**When Supabase is reset**:
+
+1. **Detect the reset**:
+   ```bash
+   # Check if tables are missing
+   supabase db diff
+   
+   # Or query directly
+   psql "$SUPABASE_DB_URL" -c "\dt" | grep -q "table_name" || echo "Table missing"
+   
+   # Or use health check script
+   yarn supabase:migrate:health
+   ```
+
+2. **Restore all migrations**:
+   ```bash
+   # Apply all migrations from scratch (destructive - clears data)
+   supabase db reset
+   
+   # Or apply pending migrations (non-destructive)
+   supabase migration up
+   
+   # Or use verification script (automatically applies pending migrations)
+   yarn supabase:migrate
+   ```
+
+3. **Verify restoration**:
+   - Run verification queries (see "Verifying Database Objects" above)
+   - Check that all expected objects exist
+   - Test critical database operations
+   - Verify RLS policies are working
+   - Use health check: `yarn supabase:migrate:health`
+
+## Guidance and Warnings
+
+### 1. When to Warn
+
+**Warn the user when**:
+- **CRITICAL**: Duplicate migration timestamps detected
+- Code references database objects that don't exist
+- Migrations are pending but not applied
+- Database appears to have been reset
+- Migration files exist but haven't been run
+- Schema changes detected but no migration created
+- Migration list shows duplicate entries
+- **CRITICAL**: Migration files exist but database schema doesn't match (post-startup verification needed)
+
+### 2. Warning Messages
+
+**Example warnings**:
+```
+🚨 CRITICAL: Duplicate migration timestamps detected!
+   Duplicates: 20250115000000 (found in 2 files)
+   This will cause migration failures. Fix before proceeding.
+   Run: ./scripts/utils/validate-migrations.sh
+   Fix: Rename one migration file to use a unique timestamp
+
+⚠️  Warning: Code references table 'new_table' but migration hasn't been applied.
+   Run: supabase migration up
+
+⚠️  Warning: Database appears to have been reset. Missing tables detected.
+   Run: supabase db reset
+   Or: supabase migration up
+
+⚠️  Warning: Migration file exists but hasn't been applied.
+   Run: supabase migration up
+   Then verify: supabase migration list
+```
+
+### 3. Suggested Actions
+
+**Provide clear next steps**:
+```bash
+# If duplicate timestamps detected (CRITICAL)
+1. Check duplicates: ./scripts/utils/validate-migrations.sh
+2. Identify duplicate files: ls -1 supabase/migrations/*.sql | grep "TIMESTAMP"
+3. Rename one file: git mv old_name.sql new_unique_timestamp_new_name.sql
+4. Re-validate: ./scripts/utils/validate-migrations.sh
+5. Verify: supabase migration list
+
+# If migration needed
+1. Generate unique timestamp: date +%Y%m%d%H%M%S
+2. Create migration: supabase migration new migration_name
+3. Validate: ./scripts/utils/validate-migrations.sh
+4. Review migration file in supabase/migrations/
+5. Apply migration: supabase migration up
+6. Verify: supabase migration list
+
+# If database was reset
+1. Validate migrations first: ./scripts/utils/validate-migrations.sh
+2. Apply all migrations: supabase db reset
+3. Verify tables exist: supabase db diff
+4. Test database operations
+5. Check RLS policies: See verification queries above
+```
+
+## Migration File Organization
+
+### 1. File Naming
+
+**Use timestamp format**:
+```
+YYYYMMDDHHMMSS_descriptive_name.sql
+
+Examples:
+20250120120000_add_user_preferences.sql
+20250120120001_create_feedback_items.sql
+```
+
+**CRITICAL: Timestamp Uniqueness**:
+- ✅ **ALWAYS** use unique timestamps (no duplicates)
+- ✅ Generate timestamp: `date +%Y%m%d%H%M%S`
+- ✅ Use Supabase CLI: `supabase migration new name` (auto-generates unique timestamp)
+- ❌ **NEVER** copy timestamps from other migrations
+- ❌ **NEVER** use the same timestamp for multiple migrations
+- ❌ **NEVER** manually set timestamps without checking for duplicates
+
+**Validation**:
+```bash
+# Check for duplicates (should return nothing)
+ls -1 supabase/migrations/*.sql | xargs -n1 basename | cut -d'_' -f1 | sort | uniq -d
+
+# Or use validation script
+./scripts/utils/validate-migrations.sh
+```
+
+### 2. File Location
+
+**Local migrations**: `supabase/migrations/`
+**Infrastructure migrations**: `infrastructure/supabase/migrations/`
+
+**Keep migrations in sync**:
+- Both directories should have the same migrations
+- Use the same naming convention
+- Ensure consistency between local and infrastructure
+
+### 3. Migration Content
+
+**Include all related changes**:
+- Table creation/modification
+- RLS policies
+- Triggers
+- Functions
+- Indexes
+- Constraints
+- Data migrations (if needed)
+
+**Keep migrations atomic**:
+- One logical change per migration
+- Or group related changes together
+- Ensure migration can be applied independently
+
+## Production Considerations
+
+### 1. Before Deploying
+
+**Checklist**:
+- [ ] All migrations tested locally
+- [ ] No breaking changes
+- [ ] Rollback plan exists
+- [ ] Migration order is correct
+- [ ] Dependencies are handled
+
+### 2. Deployment Process
+
+**Use deployment script**:
+```bash
+# Deploy migrations to production
+./scripts/deploy/deploy-supabase-db.sh
+
+# Or manually
+supabase db push --db-url "$SUPABASE_DB_URL"
+```
+
+**Verify deployment**:
+- Check migration status on remote
+- Verify tables exist
+- Test critical operations
+- Monitor for errors
+
+### 3. Rollback Strategy
+
+**If migration fails**:
+1. Identify the failing migration
+2. Fix the migration SQL
+3. Test locally first
+4. Redeploy with fix
+5. Or rollback if possible (Supabase doesn't support automatic rollback)
+
+## DO's and DON'Ts
+
+### DO:
+- ✅ **ALWAYS** validate migrations for duplicate timestamps before applying
+- ✅ **ALWAYS** use unique timestamps (generate with `date +%Y%m%d%H%M%S`)
+- ✅ **ALWAYS** use `supabase migration new` to auto-generate unique timestamps
+- ✅ **ALWAYS** verify migrations after `supabase start` (automatic in startup scripts)
+- ✅ **ALWAYS** run `yarn supabase:migrate` or `supabase migration up` after Supabase starts
+- ✅ Run migrations when code changes require database changes
+- ✅ Ensure migrations are complete before proceeding
+- ✅ Verify all database objects after reset
+- ✅ Test migrations locally before production
+- ✅ Include all related changes (tables, RLS, triggers, functions, indexes)
+- ✅ Use descriptive migration names
+- ✅ Check migration status before deploying
+- ✅ Warn user when migrations are needed
+- ✅ Provide clear next steps
+- ✅ Use `IF NOT EXISTS` clauses for idempotent migrations
+- ✅ Use health check script: `yarn supabase:migrate:health`
+
+### DON'T:
+- ❌ **NEVER** create migrations with duplicate timestamps
+- ❌ **NEVER** copy timestamps from other migration files
+- ❌ **NEVER** proceed if validation script finds duplicates
+- ❌ Proceed with code that requires migrations without applying them
+- ❌ Create incomplete migrations
+- ❌ Skip verification after reset
+- ❌ Deploy untested migrations
+- ❌ Create migrations with syntax errors
+- ❌ Ignore missing database objects
+- ❌ Skip RLS policies in migrations
+- ❌ Forget to create indexes for foreign keys
+- ❌ Apply migrations without checking status first
+- ❌ Apply migrations without validating for duplicates
+
+## Migration Checklist
+
+**Before creating code that uses database changes**:
+- [ ] **CRITICAL**: Unique timestamp generated/verified (no duplicates)
+- [ ] Migration file created and complete
+- [ ] **CRITICAL**: Validation script passed (no duplicate timestamps)
+- [ ] All SQL syntax validated
+- [ ] Dependencies handled correctly
+- [ ] Migration applied locally
+- [ ] Database objects verified
+- [ ] Code tested with new schema
+
+**After Supabase start/reset**:
+- [ ] **CRITICAL**: Migrations verified and applied (`yarn supabase:migrate` or `supabase migration up`)
+- [ ] All migrations applied (`supabase db reset` or `supabase migration up`)
+- [ ] All tables verified to exist
+- [ ] All RLS policies verified
+- [ ] All triggers verified
+- [ ] All functions verified
+- [ ] All indexes verified
+- [ ] Critical operations tested
+- [ ] Health check passed (`yarn supabase:migrate:health`)
+
+**Before production deployment**:
+- [ ] All migrations tested locally
+- [ ] Migration order verified
+- [ ] No breaking changes
+- [ ] Rollback plan exists
+- [ ] Deployment script ready
+- [ ] Verification queries prepared
+
+## Related Rules
+
+- `.cursor/rules/database-queries.mdc` - Database query patterns
+- `.cursor/rules/environment-variables.mdc` - Environment variable standards
+- `.cursor/rules/vars.mdc` - Quick reference for Supabase commands

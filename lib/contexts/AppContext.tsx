@@ -27,7 +27,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   /**
-   * Load app ID from cookie
+   * Load app ID from cookie on mount
    */
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -39,6 +39,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (cookieAppId) {
       setAppIdState(cookieAppId);
+    } else {
+      // If no cookie, try to get from user's memberships
+      // This will be handled by middleware, but we can also fetch here
+      setLoading(false);
     }
   }, []);
 
