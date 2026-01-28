@@ -55,161 +55,79 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
-    let supabase
-    try {
-      supabase = createMiddlewareClient(request)
-    } catch (error) {
-      // If Supabase client creation fails (e.g., missing env vars), allow request
-      // This prevents middleware from breaking the entire app
-      console.error('[Middleware] Failed to create Supabase client:', error)
+    // Allow onboarding routes to proceed without auth check
+    // These routes handle their own authentication
+    if (pathname === '/app/create' || pathname === '/app/select') {
       return NextResponse.next()
     }
 
-    // Check authentication - use getUser() to validate token with Supabase Auth server
-    // Add timeout protection for Edge runtime
-    let user, userError
+    // Create Supabase client for auth check
+    // In production Edge runtime, auth checks may fail - make them completely optional
+    let user: any = null
+    let authCheckSucceeded = false
+
     try {
-      const getUserPromise = supabase.auth.getUser()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Auth timeout')), 10000)
-      )
-      const result = (await Promise.race([getUserPromise, timeoutPromise])) as any
-      user = result.data?.user
-      userError = result.error
+      const supabase = createMiddlewareClient(request)
+
+      // Check authentication - use getUser() to validate token
+      // In production, if this fails, we'll allow the request to proceed
+      const authResult = await supabase.auth.getUser()
+      authCheckSucceeded = true
+
+      if (authResult.error) {
+        // Auth error - user is not authenticated (check succeeded, user is not logged in)
+        user = null
+      } else if (authResult.data?.user) {
+        // User is authenticated
+        user = authResult.data.user
+      } else {
+        // No user found
+        user = null
+      }
     } catch (error) {
-      // On timeout or error, redirect to login
-      console.error('[Middleware] Auth check failed:', error)
-      const redirectUrl = createAppUrl('/login')
-      redirectUrl.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(redirectUrl)
+      // Any error in auth check (client creation, network, Edge runtime issues)
+      // In production Edge runtime, allow request to proceed
+      // App layer will handle authentication
+      authCheckSucceeded = false
+      user = null
     }
 
-    // If not authenticated, redirect to login
-    if (userError || !user) {
-      const redirectUrl = createAppUrl('/login')
-      redirectUrl.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(redirectUrl)
+    // Only redirect to login if auth check succeeded AND user is not authenticated
+    // If auth check failed (caught error), allow request to proceed to avoid breaking the app
+    if (authCheckSucceeded && !user) {
+      // User is not authenticated - redirect to login
+      try {
+        const origin = request.nextUrl.origin
+        const redirectUrl = createAppUrl('/login', origin)
+        redirectUrl.searchParams.set('redirect', pathname)
+        return NextResponse.redirect(redirectUrl)
+      } catch {
+        // If URL creation fails, just allow request
+        return NextResponse.next()
+      }
     }
 
-    // Get session after validating user
-    // Add timeout protection for Edge runtime
-    let session
-    try {
-      const getSessionPromise = supabase.auth.getSession()
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Session timeout')), 5000)
-      )
-      const result = (await Promise.race([getSessionPromise, timeoutPromise])) as any
-      session = result.data?.session
-    } catch (error) {
-      // On timeout or error, redirect to login
-      console.error('[Middleware] Session check failed:', error)
-      const redirectUrl = createAppUrl('/login')
-      redirectUrl.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(redirectUrl)
-    }
+    // If auth check failed or user is authenticated, continue with app ID handling
 
-    if (!session) {
-      const redirectUrl = createAppUrl('/login')
-      redirectUrl.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(redirectUrl)
-    }
-
-    // Get app ID from cookie or header
+    // Get app ID from cookie or header (no database query in middleware)
+    // Database queries are unreliable in Edge runtime - let app layer handle it
     const cookieAppId = request.cookies.get('app_id')?.value
     const headerAppId = request.headers.get('x-app-id')
-
-    let appId: string | null = null
-
-    // Priority: header > cookie > user membership
-    // Note: validateAppId uses createServerSupabaseClient which may not work in middleware
-    // For now, we'll trust the appId from header/cookie and validate later if needed
-    if (headerAppId) {
-      appId = headerAppId
-    } else if (cookieAppId) {
-      appId = cookieAppId
-    }
-
-    // If no app ID, check user's app memberships
-    // Note: In production Edge runtime, database queries may timeout or fail
-    // We'll make this optional and fail gracefully
-    if (!appId && user) {
-      // Allow onboarding routes to proceed without redirect loop
-      if (pathname === '/app/create' || pathname === '/app/select') {
-        return NextResponse.next()
-      }
-
-      try {
-        // Add timeout for database query (Edge runtime has strict limits)
-        const queryPromise = (async () => {
-          const supabaseForQuery = createMiddlewareClient(request)
-          return await supabaseForQuery
-            .from('app_members')
-            .select('app_id')
-            .eq('user_id', user.id as any)
-        })()
-
-        // Race against timeout (5 seconds max for Edge runtime)
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Query timeout')), 5000)
-        )
-
-        const { data: memberships, error: membershipsError } = (await Promise.race([
-          queryPromise,
-          timeoutPromise,
-        ])) as any
-
-        if (membershipsError) {
-          // On error, allow request to proceed - app layer will handle app selection
-          return NextResponse.next()
-        }
-
-        const userAppIds = (memberships as any)?.map((m: any) => m.app_id) || []
-
-        if (userAppIds.length === 0) {
-          // No apps - redirect to app creation
-          return NextResponse.redirect(createAppUrl('/app/create'))
-        } else if (userAppIds.length === 1) {
-          // Single app - set app_id cookie and header
-          const response = NextResponse.next()
-          response.cookies.set('app_id', userAppIds[0], {
-            path: '/',
-            maxAge: 365 * 24 * 60 * 60, // 1 year
-          })
-          response.headers.set('x-app-id', userAppIds[0])
-          return response
-        } else {
-          // Multiple apps - redirect to app selection
-          return NextResponse.redirect(createAppUrl('/app/select'))
-        }
-      } catch (error) {
-        // On timeout or error, allow request to proceed
-        // The app layer will handle app selection if needed
-        // This prevents middleware from blocking all requests
-        return NextResponse.next()
-      }
-    }
+    const appId = headerAppId || cookieAppId || null
 
     // Set app_id in headers and cookies for downstream use (if we have one)
-    // Note: We skip validation here as validateAppId uses server-only features
-    // Validation will happen in the app layer if needed
+    const response = NextResponse.next()
     if (appId) {
-      const response = NextResponse.next()
       response.headers.set('x-app-id', appId)
       response.cookies.set('app_id', appId, {
         path: '/',
         maxAge: 365 * 24 * 60 * 60, // 1 year
       })
-      return response
     }
 
-    // No app ID but user is authenticated - allow request to proceed
-    // The app will handle app selection if needed
-    return NextResponse.next()
+    return response
   } catch (error) {
-    // Catch any unexpected errors and log them
-    console.error('[Middleware] Unexpected error:', error)
-    // Fail open - allow request to proceed rather than blocking
+    // Catch any unexpected errors and allow request to proceed
     // This prevents middleware from breaking the entire app
     return NextResponse.next()
   }

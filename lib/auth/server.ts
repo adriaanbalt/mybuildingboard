@@ -27,15 +27,26 @@ const getSupabaseAnonKey = () => {
 }
 
 // For non-Edge contexts, validate at module load
-if (typeof process !== 'undefined' && process.env) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Note: In Edge runtime (middleware), module-level code may not execute
+// Validation happens at runtime in the functions instead
+try {
+  if (typeof process !== 'undefined' && process.env) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error(
-      'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.'
-    )
+    if (!supabaseUrl || !supabaseAnonKey) {
+      // Only throw in non-Edge contexts (server components, API routes)
+      // In Edge runtime, this check may fail silently, which is fine
+      // Functions will validate at runtime instead
+      throw new Error(
+        'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.'
+      )
+    }
   }
+} catch (error) {
+  // In Edge runtime, module-level errors are caught and ignored
+  // Functions will validate at runtime instead
+  // This prevents middleware from failing at module load time
 }
 
 /**

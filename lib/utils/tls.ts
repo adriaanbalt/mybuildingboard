@@ -22,6 +22,12 @@ let tlsConfigured = false
  * @param url - The URL being connected to (optional, for validation)
  */
 export function configureLocalTLS(url?: string): void {
+  // Edge runtime check - if we're in Edge runtime, skip TLS configuration
+  // Edge runtime doesn't use Node.js TLS, so this is not needed
+  if (typeof process === 'undefined' || !process.env) {
+    return
+  }
+
   // Only configure in development
   if (process.env.NODE_ENV !== 'development') {
     return
@@ -58,6 +64,11 @@ export function configureLocalTLS(url?: string): void {
  * Check if a URL requires local TLS configuration
  */
 export function requiresLocalTLS(url: string): boolean {
+  // Edge runtime check
+  if (typeof process === 'undefined' || !process.env) {
+    return false
+  }
+
   if (process.env.NODE_ENV !== 'development') {
     return false
   }

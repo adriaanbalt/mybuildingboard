@@ -38,16 +38,31 @@ export function getAppUrl(): string {
 
 /**
  * Create a URL for a given path using the app URL
- * Edge runtime compatible
+ * Edge runtime compatible - uses request origin as fallback
  */
-export function createAppUrl(path: string): URL {
+export function createAppUrl(path: string, origin?: string): URL {
   try {
     const appUrl = getAppUrl()
-    return new URL(path, appUrl)
+    // Validate URL is valid
+    if (appUrl && (appUrl.startsWith('http://') || appUrl.startsWith('https://'))) {
+      return new URL(path, appUrl)
+    }
+    // If appUrl is invalid, use origin if provided
+    if (origin) {
+      return new URL(path, origin)
+    }
+    // Last resort fallback
+    return new URL(path, 'https://localhost:3000')
   } catch (error) {
     // Fallback if URL construction fails
-    // This can happen in Edge runtime with invalid URLs
-    console.error('[createAppUrl] Failed to create URL:', error)
+    // Use origin from request if available
+    if (origin) {
+      try {
+        return new URL(path, origin)
+      } catch {
+        // If that also fails, use default
+      }
+    }
     // Return a safe fallback URL
     return new URL(path, 'https://localhost:3000')
   }
