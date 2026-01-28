@@ -5,7 +5,6 @@
  */
 
 import { AuthenticationError, AuthorizationError } from '@/lib/errors'
-import { configureLocalTLS } from '@/lib/utils/tls'
 import type { Session, User } from '@supabase/supabase-js'
 import { redirect } from 'next/navigation'
 import type { NextRequest, NextResponse } from 'next/server'
@@ -107,18 +106,7 @@ export async function requireAuthForRouteHandler(
   session: Session
   supabase: ReturnType<typeof createRouteHandlerClient>
 }> {
-  // Configure TLS for localhost (disable SSL verification for self-signed certs)
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing Supabase environment variables')
-  }
-  
-  if (supabaseUrl) {
-    configureLocalTLS(supabaseUrl)
-  }
-  
+  // TLS is automatically configured in createRouteHandlerClient
   const supabase = createRouteHandlerClient(request, response)
   
   // First validate the user by calling getUser (validates token with Supabase Auth server)

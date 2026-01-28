@@ -57,6 +57,12 @@ def get_email_provider_config() -> Dict[str, Any]:
             'refresh_token': os.environ.get('GMAIL_REFRESH_TOKEN'),
             'access_token': os.environ.get('GMAIL_ACCESS_TOKEN'),
         })
+    elif EMAIL_PROVIDER_TYPE == 'mailgun':
+        config.update({
+            'api_key': os.environ.get('MAILGUN_API_KEY'),
+            'domain': os.environ.get('MAILGUN_DOMAIN'),
+            'webhook_url': os.environ.get('MAILGUN_WEBHOOK_URL'),  # Optional
+        })
     
     return config
 

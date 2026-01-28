@@ -50,6 +50,12 @@ def get_email_provider_config() -> Dict[str, Any]:
             'refresh_token': os.environ.get('GMAIL_REFRESH_TOKEN'),
             'access_token': os.environ.get('GMAIL_ACCESS_TOKEN'),
         })
+    elif EMAIL_PROVIDER_TYPE == 'mailgun':
+        config.update({
+            'api_key': os.environ.get('MAILGUN_API_KEY'),
+            'domain': os.environ.get('MAILGUN_DOMAIN'),
+            'webhook_url': os.environ.get('MAILGUN_WEBHOOK_URL'),  # Optional
+        })
     
     return config
 
@@ -152,7 +158,7 @@ def ingest_email(
     """
     try:
         # Check if email already processed (idempotency)
-        existing = supabase.table('emails').select('id').eq('app_id', app_id).eq('provider_id', email.id).execute()
+        existing = supabase.table('emails').select('id').eq('app_id', app_id).eq('provider_id', email.id).eq('provider_type', email.providerType).execute()
         if existing.data:
             logger.info(f"Email {email.id} already processed, skipping")
             return {'status': 'skipped', 'email_id': existing.data[0]['id'], 'reason': 'already_processed'}
@@ -165,14 +171,17 @@ def ingest_email(
             'thread_id': email.threadId,
             'sender_email': email.sender.email,
             'sender_name': email.sender.name,
-            'recipient_to': email.recipients.to,
-            'recipient_cc': email.recipients.cc,
             'subject': email.subject,
             'body_text': email.bodyText,
             'body_html': email.bodyHtml,
             'received_at': email.receivedAt.isoformat(),
             'status': 'pending',
-            'metadata': email.metadata or {},
+            'provider_metadata': {
+                **(email.metadata or {}),
+                'recipient_to': email.recipients.to,
+                'recipient_cc': email.recipients.cc,
+                'recipient_bcc': email.recipients.bcc,
+            },
         }
         
         result = supabase.table('emails').insert(email_record).execute()

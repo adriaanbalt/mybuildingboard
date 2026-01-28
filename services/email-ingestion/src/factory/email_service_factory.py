@@ -7,6 +7,7 @@ Creates email service instances based on provider type.
 from typing import Dict, Any
 from ..interfaces.email_service import EmailService
 from ..providers.gmail.gmail_service import GmailEmailService
+from ..providers.mailgun.mailgun_service import MailgunEmailService
 
 
 class EmailServiceFactory:
@@ -51,8 +52,15 @@ class EmailServiceFactory:
             # TODO: Implement SendGridEmailService
             raise NotImplementedError("SendGrid provider not yet implemented")
         elif provider_type == "mailgun":
-            # TODO: Implement MailgunEmailService
-            raise NotImplementedError("Mailgun provider not yet implemented")
+            # Create Mailgun config dict
+            mailgun_config = {
+                'provider_type': 'mailgun',
+                'api_key': config.get('api_key') or config.get('credentials', {}).get('api_key'),
+                'domain': config.get('domain') or config.get('credentials', {}).get('domain'),
+                'inbox_address': config.get('inbox_address', ''),
+                'webhook_url': config.get('webhook_url'),  # Optional webhook URL for receiving emails
+            }
+            return MailgunEmailService(mailgun_config)
         elif provider_type == "microsoft_graph":
             # TODO: Implement MicrosoftGraphEmailService
             raise NotImplementedError("Microsoft Graph provider not yet implemented")

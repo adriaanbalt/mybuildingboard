@@ -5,6 +5,7 @@
  */
 
 import type { Database } from '@/lib/database/types'
+import { configureLocalTLS } from '@/lib/utils/tls'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { NextRequest, NextResponse } from 'next/server'
@@ -21,8 +22,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 /**
  * Create Supabase client for server-side (Next.js Server Components, API Routes)
  * Uses cookies for session management
+ * 
+ * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export async function createServerSupabaseClient() {
+  // Configure TLS for localhost (disable SSL verification for self-signed certs)
+  configureLocalTLS(supabaseUrl)
+  
   const cookieStore = await cookies()
 
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -48,8 +54,13 @@ export async function createServerSupabaseClient() {
 /**
  * Create Supabase client for middleware
  * Uses cookies for session management
+ * 
+ * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export function createMiddlewareClient(request: Request) {
+  // Configure TLS for localhost (disable SSL verification for self-signed certs)
+  configureLocalTLS(supabaseUrl)
+  
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
@@ -72,11 +83,16 @@ export function createMiddlewareClient(request: Request) {
 /**
  * Create Supabase client for Route Handlers (API Routes)
  * Uses cookies from request and can set cookies in response
+ * 
+ * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export function createRouteHandlerClient(
   request: NextRequest,
   response: NextResponse
 ) {
+  // Configure TLS for localhost (disable SSL verification for self-signed certs)
+  configureLocalTLS(supabaseUrl)
+  
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {

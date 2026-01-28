@@ -1,0 +1,1 @@
+"""Mailgun email provider."""
