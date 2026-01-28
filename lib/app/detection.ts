@@ -25,7 +25,7 @@ export async function getAppIdFromUserMembership(): Promise<string | null> {
   const { data, error } = await supabase
     .from('app_members')
     .select('app_id')
-    .eq('user_id', user.id)
+    .eq('user_id', user.id as any)
     .limit(1)
     .single()
 
@@ -33,7 +33,7 @@ export async function getAppIdFromUserMembership(): Promise<string | null> {
     return null
   }
 
-  return data.app_id
+  return (data as any).app_id
 }
 
 /**
@@ -46,13 +46,16 @@ export async function getUserAppIds(): Promise<string[]> {
   }
 
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase.from('app_members').select('app_id').eq('user_id', user.id)
+  const { data, error } = await supabase
+    .from('app_members')
+    .select('app_id')
+    .eq('user_id', user.id as any)
 
   if (error || !data) {
     return []
   }
 
-  return data.map((member) => member.app_id)
+  return (data as any[]).map((member: any) => member.app_id)
 }
 
 /**
@@ -94,14 +97,14 @@ export async function getAppIdFromSubdomain(hostname: string): Promise<string | 
   const { data, error } = await supabase
     .from('apps')
     .select('id')
-    .eq('subdomain', subdomain)
+    .eq('subdomain', subdomain as any)
     .single()
 
   if (error || !data) {
     return null
   }
 
-  return data.id
+  return (data as any).id
 }
 
 /**
@@ -109,7 +112,11 @@ export async function getAppIdFromSubdomain(hostname: string): Promise<string | 
  */
 export async function validateAppId(appId: string): Promise<boolean> {
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase.from('apps').select('id').eq('id', appId).single()
+  const { data, error } = await supabase
+    .from('apps')
+    .select('id')
+    .eq('id', appId as any)
+    .single()
 
   return !error && !!data
 }

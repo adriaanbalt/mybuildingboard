@@ -47,7 +47,7 @@ export async function requireAuth(redirectTo: string = '/login'): Promise<{
 
 /**
  * Require authentication for API routes - throws AuthenticationError if not authenticated
- * 
+ *
  * NOTE: This function uses createServerSupabaseClient which works for Server Components
  * but may not work properly in Route Handlers. For Route Handlers, use requireAuthForRouteHandler instead.
  *
@@ -89,7 +89,7 @@ export async function requireAuthForAPI(): Promise<{
 
 /**
  * Require authentication for Route Handlers (API Routes) - throws AuthenticationError if not authenticated
- * 
+ *
  * This function should be used in Route Handlers (app/api routes) as it properly
  * handles cookies from the request and can set cookies in the response.
  *
@@ -108,7 +108,7 @@ export async function requireAuthForRouteHandler(
 }> {
   // TLS is automatically configured in createRouteHandlerClient
   const supabase = createRouteHandlerClient(request, response)
-  
+
   // First validate the user by calling getUser (validates token with Supabase Auth server)
   // This is the secure way to authenticate - getUser() contacts Supabase to verify the token
   const {
@@ -121,7 +121,7 @@ export async function requireAuthForRouteHandler(
     const cookies = request.cookies.getAll()
     const authCookies = cookies.filter((c) => c.name.includes('auth-token'))
     const cookieHeader = request.headers.get('cookie')
-    
+
     throw new AuthenticationError('Authentication required', {
       error: userError?.message || 'No valid user found',
       userError: userError?.message,
@@ -194,7 +194,7 @@ export async function getServerUser(): Promise<User | null> {
  */
 export async function getServerSession(): Promise<Session | null> {
   const supabase = await createServerSupabaseClient()
-  
+
   // First verify user is authenticated
   const {
     data: { user },
@@ -230,8 +230,8 @@ export async function requireAppMembership(
   const { data, error } = await supabase
     .from('app_members')
     .select('id')
-    .eq('app_id', appId)
-    .eq('user_id', user.id)
+    .eq('app_id', appId as any)
+    .eq('user_id', user.id as any)
     .single()
 
   if (error || !data) {
@@ -260,8 +260,8 @@ export async function requireAppMembershipForAPI(
   const { data, error } = await supabase
     .from('app_members')
     .select('id')
-    .eq('app_id', appId)
-    .eq('user_id', user.id)
+    .eq('app_id', appId as any)
+    .eq('user_id', user.id as any)
     .single()
 
   if (error || !data) {
@@ -288,7 +288,7 @@ export async function getUserAppMemberships(userId: string) {
   const { data, error } = await supabase
     .from('app_members')
     .select('app_id, role')
-    .eq('user_id', userId)
+    .eq('user_id', userId as any)
 
   if (error) {
     throw new AuthenticationError('Failed to get app memberships', { userId })
@@ -310,7 +310,7 @@ export async function isAppMember(userId: string, appId: string): Promise<boolea
     .from('app_members')
     .select('id')
     .eq('app_id', appId)
-    .eq('user_id', userId)
+    .eq('user_id', userId as any)
     .single()
 
   return !error && !!data
@@ -332,14 +332,14 @@ export async function getUserAppRole(
     .from('app_members')
     .select('role')
     .eq('app_id', appId)
-    .eq('user_id', userId)
+    .eq('user_id', userId as any)
     .single()
 
   if (error || !data) {
     return null
   }
 
-  return data.role as 'owner' | 'admin' | 'member'
+  return (data as any).role as 'owner' | 'admin' | 'member'
 }
 
 /**

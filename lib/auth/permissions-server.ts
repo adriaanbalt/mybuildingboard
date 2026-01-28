@@ -13,14 +13,7 @@ import { logger } from '@/lib/errors/logger'
  */
 function isAppRoutePath(pathname: string): boolean {
   // App routes that require membership
-  const appRoutes = [
-    '/dashboard',
-    '/documents',
-    '/query',
-    '/history',
-    '/settings',
-    '/app/',
-  ]
+  const appRoutes = ['/dashboard', '/documents', '/query', '/history', '/settings', '/app/']
 
   return appRoutes.some((route) => pathname.startsWith(route))
 }
@@ -54,17 +47,17 @@ export async function resolveAccessRedirectServer(
     // Check if user exists in app_members table (indicates they've completed onboarding)
     // For MyBuildingBoard, we check if user is a member of any app
     logger.debug('Checking app membership for user', { userId, pathname })
-    const { data: memberCheckData, error: memberCheckError } = await supabase
+    const { data: memberCheckData, error: memberCheckError } = await supabase!
       .from('app_members')
       .select('id, app_id, role')
-      .eq('user_id', userId)
+      .eq('user_id', userId as any)
       .limit(1)
 
     logger.debug('App membership check result', {
       userId,
       hasError: !!memberCheckError,
-      errorCode: memberCheckError?.code,
-      errorMessage: memberCheckError?.message,
+      errorCode: (memberCheckError as any)?.code,
+      errorMessage: (memberCheckError as any)?.message,
       hasData: !!memberCheckData,
       dataLength: memberCheckData?.length || 0,
       membership: memberCheckData?.[0] || null,
@@ -73,15 +66,11 @@ export async function resolveAccessRedirectServer(
     // Handle PostgREST schema cache errors (PGRST205) - table not found in schema cache
     // This can happen in development when schema changes
     if (memberCheckError) {
-      if (memberCheckError.code === 'PGRST205') {
-        logger.warn(
-          'PostgREST schema cache error - table not found in schema cache',
-          {
-            error: memberCheckError.message,
-            suggestion:
-              'This may resolve after a moment. If it persists, restart Supabase.',
-          }
-        )
+      if ((memberCheckError as any).code === 'PGRST205') {
+        logger.warn('PostgREST schema cache error - table not found in schema cache', {
+          error: (memberCheckError as any).message,
+          suggestion: 'This may resolve after a moment. If it persists, restart Supabase.',
+        })
         // On schema cache error, allow access (fail open)
         // The middleware will handle app selection if needed
         return null
@@ -91,18 +80,17 @@ export async function resolveAccessRedirectServer(
       logger.error('Error checking app membership', {
         error: memberCheckError,
         userId,
-      })
+      } as any)
       return null
     }
 
-    const hasMembership =
-      !memberCheckError && memberCheckData && memberCheckData.length > 0
+    const hasMembership = !memberCheckError && memberCheckData && memberCheckData.length > 0
 
     logger.debug('Membership check final result', {
       userId,
       hasMembership,
       pathname,
-      errorCode: memberCheckError?.code,
+      errorCode: (memberCheckError as any)?.code,
     })
 
     // If user is not a member of any app (new user), redirect to app creation if on app route
@@ -127,7 +115,7 @@ export async function resolveAccessRedirectServer(
 
     return null // No redirect needed
   } catch (error) {
-    logger.error('Error in resolveAccessRedirectServer', { error })
+    logger.error('Error in resolveAccessRedirectServer', { error } as any)
     // On error, allow access (fail open) - let client-side handle it
     return null
   }

@@ -21,5 +21,5 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Uses cookies for session management
  */
 export function createClient() {
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+  return createBrowserClient<Database>(supabaseUrl!, supabaseAnonKey!)
 }

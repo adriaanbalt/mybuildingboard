@@ -27,7 +27,11 @@ const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
  */
 async function loadAppFromDatabase(appId: string): Promise<App | null> {
   const supabase = await createServerSupabaseClient()
-  const { data, error } = await supabase.from('apps').select('*').eq('id', appId).single()
+  const { data, error } = await supabase
+    .from('apps')
+    .select('id, name, subdomain, created_at, updated_at')
+    .eq('id', appId as any)
+    .single()
 
   if (error || !data) {
     return null
@@ -44,14 +48,14 @@ async function loadAppConfigFromDatabase(appId: string): Promise<AppConfig['conf
   const { data, error } = await supabase
     .from('app_configs')
     .select('config')
-    .eq('app_id', appId)
+    .eq('app_id', appId as any)
     .single()
 
   if (error || !data) {
     return null
   }
 
-  return data.config
+  return (data as any).config
 }
 
 /**
@@ -71,7 +75,7 @@ export async function getAppConfig(
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       return {
         ...cached.app,
-        config: cached.config,
+        config: cached.config || undefined,
       }
     }
   }

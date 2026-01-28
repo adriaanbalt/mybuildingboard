@@ -13,7 +13,16 @@ import { NextResponse } from 'next/server'
 /**
  * Public routes that don't require authentication
  */
-const publicRoutes = ['/', '/login', '/signup', '/features', '/pricing', '/privacy', '/terms', '/auth/callback']
+const publicRoutes = [
+  '/',
+  '/login',
+  '/signup',
+  '/features',
+  '/pricing',
+  '/privacy',
+  '/terms',
+  '/auth/callback',
+]
 
 /**
  * Check if route is public
@@ -94,9 +103,9 @@ export async function middleware(request: NextRequest) {
     const { data: memberships } = await supabaseForQuery
       .from('app_members')
       .select('app_id')
-      .eq('user_id', user.id)
+      .eq('user_id', user.id as any)
 
-    const userAppIds = memberships?.map((m) => m.app_id) || []
+    const userAppIds = (memberships as any)?.map((m: any) => m.app_id) || []
 
     if (userAppIds.length === 0) {
       // No apps - redirect to app creation
@@ -117,7 +126,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Validate app ID exists
-  const isValid = await validateAppId(appId)
+  const isValid = await validateAppId(appId!)
   if (!isValid) {
     // Invalid app ID - clear cookie and redirect to app selection
     // But allow /app/select to proceed if already there to prevent redirect loop
@@ -133,8 +142,8 @@ export async function middleware(request: NextRequest) {
 
   // Set app_id in headers and cookies for downstream use
   const response = NextResponse.next()
-  response.headers.set('x-app-id', appId)
-  response.cookies.set('app_id', appId, {
+  response.headers.set('x-app-id', appId!)
+  response.cookies.set('app_id', appId!, {
     path: '/',
     maxAge: 365 * 24 * 60 * 60, // 1 year
   })

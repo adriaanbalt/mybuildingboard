@@ -22,23 +22,23 @@ if (!supabaseUrl || !supabaseAnonKey) {
 /**
  * Create Supabase client for server-side (Next.js Server Components, API Routes)
  * Uses cookies for session management
- * 
+ *
  * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export async function createServerSupabaseClient() {
   // Configure TLS for localhost (disable SSL verification for self-signed certs)
   configureLocalTLS(supabaseUrl)
-  
+
   const cookieStore = await cookies()
 
-  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+  return createServerClient<Database>(supabaseUrl!, supabaseAnonKey!, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: any) {
         try {
-          cookiesToSet.forEach(({ name, value, options }) => {
+          cookiesToSet.forEach(({ name, value, options }: any) => {
             cookieStore.set(name, value, options)
           })
         } catch {
@@ -54,25 +54,27 @@ export async function createServerSupabaseClient() {
 /**
  * Create Supabase client for middleware
  * Uses cookies for session management
- * 
+ *
  * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export function createMiddlewareClient(request: Request) {
   // Configure TLS for localhost (disable SSL verification for self-signed certs)
   configureLocalTLS(supabaseUrl)
-  
-  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+
+  return createServerClient<Database>(supabaseUrl!, supabaseAnonKey!, {
     cookies: {
       getAll() {
-        return request.headers
-          .get('cookie')
-          ?.split('; ')
-          .map((cookie) => {
-            const [name, ...rest] = cookie.split('=')
-            return { name, value: decodeURIComponent(rest.join('=')) }
-          }) || []
+        return (
+          request.headers
+            .get('cookie')
+            ?.split('; ')
+            .map((cookie) => {
+              const [name, ...rest] = cookie.split('=')
+              return { name, value: decodeURIComponent(rest.join('=')) }
+            }) || []
+        )
       },
-      setAll(_cookiesToSet) {
+      setAll(_cookiesToSet: any) {
         // Middleware can't set cookies, so we skip this
         // The middleware will handle session refresh
       },
@@ -83,17 +85,14 @@ export function createMiddlewareClient(request: Request) {
 /**
  * Create Supabase client for Route Handlers (API Routes)
  * Uses cookies from request and can set cookies in response
- * 
+ *
  * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
-export function createRouteHandlerClient(
-  request: NextRequest,
-  response: NextResponse
-) {
+export function createRouteHandlerClient(request: NextRequest, response: NextResponse) {
   // Configure TLS for localhost (disable SSL verification for self-signed certs)
   configureLocalTLS(supabaseUrl)
-  
-  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+
+  return createServerClient<Database>(supabaseUrl!, supabaseAnonKey!, {
     cookies: {
       getAll() {
         // Try using request.cookies first (Next.js 15 way)
@@ -104,26 +103,24 @@ export function createRouteHandlerClient(
             value: cookie.value,
           }))
         }
-        
+
         // Fallback to parsing cookie header manually (like middleware)
         // This handles cases where cookies might not be parsed correctly
         const cookieHeader = request.headers.get('cookie')
         if (cookieHeader) {
-          return cookieHeader
-            .split('; ')
-            .map((cookie) => {
-              const [name, ...rest] = cookie.split('=')
-              return { 
-                name: name.trim(), 
-                value: decodeURIComponent(rest.join('=')) 
-              }
-            })
+          return cookieHeader.split('; ').map((cookie) => {
+            const [name, ...rest] = cookie.split('=')
+            return {
+              name: name.trim(),
+              value: decodeURIComponent(rest.join('=')),
+            }
+          })
         }
-        
+
         return []
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
+      setAll(cookiesToSet: any) {
+        cookiesToSet.forEach(({ name, value, options }: any) => {
           response.cookies.set(name, value, options)
         })
       },

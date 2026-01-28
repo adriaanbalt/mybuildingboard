@@ -1,11 +1,11 @@
 /**
  * React Context Providers
- * 
+ *
  * Context providers for the application.
  */
 
 // Auth context (implemented in Phase 1.3)
-export { AuthProvider, useAuth, useUser, useSession } from './AuthContext';
+export { AuthProvider, useAuth, useUser, useSession } from '../contexts/AuthContext'
 
 // App context (implemented in Phase 1.4)
 export {
@@ -14,4 +14,4 @@ export {
   useAppId,
   useAppConfig,
   useAppMembership,
-} from './AppContext';
+} from '../contexts/AppContext'

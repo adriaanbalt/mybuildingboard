@@ -21,7 +21,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Supabase client for client-side operations (browser)
  * Uses anon key - RLS policies enforce security
  */
-export const supabase = createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
+export const supabase = createSupabaseClient<Database>(supabaseUrl!, supabaseAnonKey!, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
@@ -37,10 +37,10 @@ export function createServerClient() {
 
   if (!serviceRoleKey) {
     // Fall back to anon key if service role key not available
-    return createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey)
+    return createSupabaseClient<Database>(supabaseUrl!, supabaseAnonKey!)
   }
 
-  return createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
+  return createSupabaseClient<Database>(supabaseUrl!, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
@@ -79,7 +79,7 @@ export function getSupabaseAdmin() {
     // when it detects a session (even from cookies). We must use a custom fetch
     // to explicitly remove the Authorization header and ensure only the apikey
     // header with the service role key is sent to PostgREST.
-    adminClient = createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
+    adminClient = createSupabaseClient<Database>(supabaseUrl!, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
