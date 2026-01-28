@@ -35,55 +35,6 @@ export async function searchSimilarChunks(
   const topK = options.topK || 5;
   const similarityThreshold = options.similarityThreshold ?? 0.0;
   
-  // Build query
-  let query = supabase
-    .from('document_chunks')
-    .select(`
-      id,
-      content,
-      chunk_index,
-      email_id,
-      attachment_id,
-      app_id,
-      metadata,
-      embedding,
-      emails!inner(
-        id,
-        subject,
-        sender_email,
-        received_at
-      ),
-      attachments(
-        id,
-        filename,
-        content_type
-      )
-    `)
-    .eq('app_id', options.appId) // Tenant isolation
-    .eq('status', 'completed') // Only search completed chunks with embeddings
-    .not('embedding', 'is', null); // Only chunks with embeddings
-  
-  // Apply metadata filters
-  if (options.emailId) {
-    query = query.eq('email_id', options.emailId);
-  }
-  
-  if (options.attachmentId) {
-    query = query.eq('attachment_id', options.attachmentId);
-  }
-  
-  if (options.dateFrom) {
-    query = query.gte('emails.received_at', options.dateFrom.toISOString());
-  }
-  
-  if (options.dateTo) {
-    query = query.lte('emails.received_at', options.dateTo.toISOString());
-  }
-  
-  if (options.contentType) {
-    query = query.eq('attachments.content_type', options.contentType);
-  }
-  
   // Convert embedding to pgvector format: '[0.1,0.2,0.3,...]'
   const embeddingStr = '[' + queryEmbedding.join(',') + ']';
   
@@ -106,10 +57,32 @@ export async function searchSimilarChunks(
   }
   
   // Get email and attachment details for results
-  const emailIds = [...new Set(data.map((chunk: any) => chunk.email_id))];
-  const attachmentIds = data
-    .map((chunk: any) => chunk.attachment_id)
-    .filter((id: string | null) => id !== null);
+  interface ChunkResult {
+    email_id: string;
+    attachment_id: string | null;
+    chunk_id: string;
+    content: string;
+    similarity: number;
+    chunk_index: number;
+    metadata: Record<string, unknown> | null;
+  }
+  
+  interface EmailResult {
+    id: string;
+    subject: string;
+    sender_email: string;
+  }
+  
+  interface AttachmentResult {
+    id: string;
+    filename: string;
+    content_type: string;
+  }
+  
+  const emailIds = [...new Set((data as ChunkResult[]).map((chunk) => chunk.email_id))];
+  const attachmentIds = (data as ChunkResult[])
+    .map((chunk) => chunk.attachment_id)
+    .filter((id: string | null): id is string => id !== null);
   
   const [emailsResult, attachmentsResult] = await Promise.all([
     emailIds.length > 0
@@ -120,11 +93,11 @@ export async function searchSimilarChunks(
       : Promise.resolve({ data: [], error: null }),
   ]);
   
-  const emails = new Map((emailsResult.data || []).map((e: any) => [e.id, e]));
-  const attachments = new Map((attachmentsResult.data || []).map((a: any) => [a.id, a]));
+  const emails = new Map((emailsResult.data || []).map((e: EmailResult) => [e.id, e]));
+  const attachments = new Map((attachmentsResult.data || []).map((a: AttachmentResult) => [a.id, a]));
   
   // Process results (similarity already calculated by Postgres function)
-  const results: SearchResult[] = data.map((chunk: any) => {
+  const results: SearchResult[] = (data as ChunkResult[]).map((chunk) => {
     const email = emails.get(chunk.email_id);
     const attachment = chunk.attachment_id ? attachments.get(chunk.attachment_id) : null;
     
@@ -158,7 +131,7 @@ export async function searchSimilarChunks(
  * @param vec2 - Second vector
  * @returns Cosine similarity score (0-1)
  */
-function calculateCosineSimilarity(vec1: number[], vec2: number[]): number {
+function _calculateCosineSimilarity(vec1: number[], vec2: number[]): number {
   if (vec1.length !== vec2.length) {
     throw new Error('Vectors must have the same length');
   }
@@ -188,7 +161,7 @@ function calculateCosineSimilarity(vec1: number[], vec2: number[]): number {
  * @param embedding - Embedding from database (string or array)
  * @returns Array of numbers
  */
-function parseEmbeddingVector(embedding: string | number[] | null): number[] {
+function _parseEmbeddingVector(embedding: string | number[] | null): number[] {
   if (!embedding) {
     throw new Error('Embedding is null or undefined');
   }

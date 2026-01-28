@@ -6,10 +6,10 @@
 
 import { cookies, headers } from 'next/headers';
 import { getAppIdFromRequest, validateAppId } from './detection';
-import { getAppConfig, getApp } from './config';
+import { getAppConfig } from './config';
 import { requireAuth, requireAuthForAPI } from '@/lib/auth/helpers';
 import { requireAppMembership as authRequireAppMembership, requireAppMembershipForAPI as authRequireAppMembershipForAPI } from '@/lib/auth/helpers';
-import { NotFoundError, AuthorizationError } from '@/lib/errors';
+import { NotFoundError } from '@/lib/errors';
 import type { AppWithConfig } from './types';
 
 /**
@@ -54,7 +54,7 @@ export async function requireAppMembership(appId?: string): Promise<{
   appId: string;
   userId: string;
 }> {
-  const { user } = await requireAuth();
+  await requireAuth();
 
   const currentAppId = appId || (await getCurrentAppId());
   if (!currentAppId) {
@@ -85,7 +85,7 @@ export async function requireAppMembershipForAPI(appId?: string): Promise<{
   appId: string;
   userId: string;
 }> {
-  const { user } = await requireAuthForAPI();
+  await requireAuthForAPI();
 
   const currentAppId = appId || (await getCurrentAppId());
   if (!currentAppId) {

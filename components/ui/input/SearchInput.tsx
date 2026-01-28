@@ -1,4 +1,4 @@
-import { InputHTMLAttributes, forwardRef } from 'react'
+import { forwardRef } from 'react'
 import { cn } from '@/lib/utils/cn'
 import { Input, InputProps } from './Input'
 

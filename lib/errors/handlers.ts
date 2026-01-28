@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { BaseError, ErrorContext } from './base';
-import { ErrorCodes, getErrorCodeMetadata } from './error-codes';
+import { ErrorCodes } from './error-codes';
 import { logger, generateRequestId } from './logger';
 
 /**

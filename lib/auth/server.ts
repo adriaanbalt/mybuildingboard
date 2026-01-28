@@ -72,7 +72,7 @@ export function createMiddlewareClient(request: Request) {
             return { name, value: decodeURIComponent(rest.join('=')) }
           }) || []
       },
-      setAll(cookiesToSet) {
+      setAll(_cookiesToSet) {
         // Middleware can't set cookies, so we skip this
         // The middleware will handle session refresh
       },

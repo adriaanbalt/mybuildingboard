@@ -24,7 +24,7 @@ export interface SearchResult {
     attachmentId?: string;
     chunkIndex: number;
     appId: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
   source: {
     emailId: string;

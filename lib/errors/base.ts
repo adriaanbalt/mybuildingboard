@@ -4,7 +4,7 @@
  * Provides base error class and specific error types for the application.
  */
 
-import { ErrorCode, ErrorCodes, ErrorCodeMetadataMap, getErrorCodeMetadata } from './error-codes';
+import { ErrorCode, ErrorCodes, getErrorCodeMetadata } from './error-codes';
 
 /**
  * Error context for additional error information
