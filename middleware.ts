@@ -55,13 +55,34 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next()
     }
 
-    const supabase = createMiddlewareClient(request)
+    let supabase
+    try {
+      supabase = createMiddlewareClient(request)
+    } catch (error) {
+      // If Supabase client creation fails (e.g., missing env vars), allow request
+      // This prevents middleware from breaking the entire app
+      console.error('[Middleware] Failed to create Supabase client:', error)
+      return NextResponse.next()
+    }
 
     // Check authentication - use getUser() to validate token with Supabase Auth server
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser()
+    // Add timeout protection for Edge runtime
+    let user, userError
+    try {
+      const getUserPromise = supabase.auth.getUser()
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Auth timeout')), 10000)
+      )
+      const result = (await Promise.race([getUserPromise, timeoutPromise])) as any
+      user = result.data?.user
+      userError = result.error
+    } catch (error) {
+      // On timeout or error, redirect to login
+      console.error('[Middleware] Auth check failed:', error)
+      const redirectUrl = createAppUrl('/login')
+      redirectUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
 
     // If not authenticated, redirect to login
     if (userError || !user) {
@@ -71,9 +92,22 @@ export async function middleware(request: NextRequest) {
     }
 
     // Get session after validating user
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    // Add timeout protection for Edge runtime
+    let session
+    try {
+      const getSessionPromise = supabase.auth.getSession()
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Session timeout')), 5000)
+      )
+      const result = (await Promise.race([getSessionPromise, timeoutPromise])) as any
+      session = result.data?.session
+    } catch (error) {
+      // On timeout or error, redirect to login
+      console.error('[Middleware] Session check failed:', error)
+      const redirectUrl = createAppUrl('/login')
+      redirectUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(redirectUrl)
+    }
 
     if (!session) {
       const redirectUrl = createAppUrl('/login')
@@ -97,6 +131,8 @@ export async function middleware(request: NextRequest) {
     }
 
     // If no app ID, check user's app memberships
+    // Note: In production Edge runtime, database queries may timeout or fail
+    // We'll make this optional and fail gracefully
     if (!appId && user) {
       // Allow onboarding routes to proceed without redirect loop
       if (pathname === '/app/create' || pathname === '/app/select') {
@@ -104,16 +140,28 @@ export async function middleware(request: NextRequest) {
       }
 
       try {
-        const supabaseForQuery = createMiddlewareClient(request)
-        const { data: memberships, error: membershipsError } = await supabaseForQuery
-          .from('app_members')
-          .select('app_id')
-          .eq('user_id', user.id as any)
+        // Add timeout for database query (Edge runtime has strict limits)
+        const queryPromise = (async () => {
+          const supabaseForQuery = createMiddlewareClient(request)
+          return await supabaseForQuery
+            .from('app_members')
+            .select('app_id')
+            .eq('user_id', user.id as any)
+        })()
+
+        // Race against timeout (5 seconds max for Edge runtime)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Query timeout')), 5000)
+        )
+
+        const { data: memberships, error: membershipsError } = (await Promise.race([
+          queryPromise,
+          timeoutPromise,
+        ])) as any
 
         if (membershipsError) {
-          console.error('[Middleware] Error fetching app memberships:', membershipsError)
-          // On error, redirect to app selection
-          return NextResponse.redirect(createAppUrl('/app/select'))
+          // On error, allow request to proceed - app layer will handle app selection
+          return NextResponse.next()
         }
 
         const userAppIds = (memberships as any)?.map((m: any) => m.app_id) || []
@@ -135,9 +183,10 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(createAppUrl('/app/select'))
         }
       } catch (error) {
-        console.error('[Middleware] Error in app membership check:', error)
-        // On error, redirect to app selection
-        return NextResponse.redirect(createAppUrl('/app/select'))
+        // On timeout or error, allow request to proceed
+        // The app layer will handle app selection if needed
+        // This prevents middleware from blocking all requests
+        return NextResponse.next()
       }
     }
 

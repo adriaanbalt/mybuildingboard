@@ -8,7 +8,7 @@
  * This is expected behavior in development and can be safely ignored.
  */
 
-let tlsConfigured = false;
+let tlsConfigured = false
 
 /**
  * Configure Node.js to accept self-signed certificates for local development.
@@ -24,7 +24,7 @@ let tlsConfigured = false;
 export function configureLocalTLS(url?: string): void {
   // Only configure in development
   if (process.env.NODE_ENV !== 'development') {
-    return;
+    return
   }
 
   // Only configure if connecting to localhost
@@ -38,13 +38,20 @@ export function configureLocalTLS(url?: string): void {
   // Only set once to avoid multiple warnings
   // Check if already set to avoid redundant configuration
   if (tlsConfigured || process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') {
-    return;
+    return
   }
 
   // Set the environment variable
   // This will trigger a Node.js warning, which is expected in development
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-  tlsConfigured = true
+  // Note: In Edge runtime (production middleware), process.env might be read-only
+  // This is safe to ignore as Edge runtime doesn't use Node.js TLS
+  try {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+    tlsConfigured = true
+  } catch (error) {
+    // In Edge runtime, process.env might be read-only - this is fine
+    // Edge runtime uses fetch API which handles TLS differently
+  }
 }
 
 /**

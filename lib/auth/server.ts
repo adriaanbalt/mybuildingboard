@@ -10,13 +10,32 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { NextRequest, NextResponse } from 'next/server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Get environment variables - in Edge runtime these might not be available at module load
+// So we'll check them at runtime instead
+const getSupabaseUrl = () => {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.NEXT_PUBLIC_SUPABASE_URL
+  }
+  return undefined
+}
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.'
-  )
+const getSupabaseAnonKey = () => {
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  }
+  return undefined
+}
+
+// For non-Edge contexts, validate at module load
+if (typeof process !== 'undefined' && process.env) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Missing Supabase environment variables. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env.local file.'
+    )
+  }
 }
 
 /**
@@ -26,12 +45,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export async function createServerSupabaseClient() {
+  const supabaseUrl = getSupabaseUrl()
+  const supabaseAnonKey = getSupabaseAnonKey()
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Missing Supabase environment variables. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set.'
+    )
+  }
+
   // Configure TLS for localhost (disable SSL verification for self-signed certs)
   configureLocalTLS(supabaseUrl)
 
   const cookieStore = await cookies()
 
-  return createServerClient<Database>(supabaseUrl!, supabaseAnonKey!, {
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return cookieStore.getAll()
@@ -58,10 +86,21 @@ export async function createServerSupabaseClient() {
  * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export function createMiddlewareClient(request: Request) {
+  // Get environment variables at runtime (Edge runtime compatible)
+  const supabaseUrl = getSupabaseUrl()
+  const supabaseAnonKey = getSupabaseAnonKey()
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Missing Supabase environment variables. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set.'
+    )
+  }
+
   // Configure TLS for localhost (disable SSL verification for self-signed certs)
+  // This is safe in Edge runtime - it will just return early in production
   configureLocalTLS(supabaseUrl)
 
-  return createServerClient<Database>(supabaseUrl!, supabaseAnonKey!, {
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         return (
@@ -89,10 +128,19 @@ export function createMiddlewareClient(request: Request) {
  * Automatically configures TLS for localhost in development to accept self-signed certificates
  */
 export function createRouteHandlerClient(request: NextRequest, response: NextResponse) {
+  const supabaseUrl = getSupabaseUrl()
+  const supabaseAnonKey = getSupabaseAnonKey()
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Missing Supabase environment variables. NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set.'
+    )
+  }
+
   // Configure TLS for localhost (disable SSL verification for self-signed certs)
   configureLocalTLS(supabaseUrl)
 
-  return createServerClient<Database>(supabaseUrl!, supabaseAnonKey!, {
+  return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
         // Try using request.cookies first (Next.js 15 way)
