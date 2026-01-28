@@ -46,12 +46,24 @@ export async function middleware(request: NextRequest) {
 
   const supabase = createMiddlewareClient(request)
 
-  // Check authentication
+  // Check authentication - use getUser() to validate token with Supabase Auth server
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+
+  // If not authenticated, redirect to login
+  if (userError || !user) {
+    const redirectUrl = createAppUrl('/login')
+    redirectUrl.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // Get session after validating user
   const {
     data: { session },
   } = await supabase.auth.getSession()
 
-  // If not authenticated, redirect to login
   if (!session) {
     const redirectUrl = createAppUrl('/login')
     redirectUrl.searchParams.set('redirect', pathname)
@@ -72,7 +84,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // If no app ID, check user's app memberships
-  if (!appId && session?.user) {
+  if (!appId && user) {
     // Allow onboarding routes to proceed without redirect loop
     if (pathname === '/app/create' || pathname === '/app/select') {
       return NextResponse.next()
@@ -82,7 +94,7 @@ export async function middleware(request: NextRequest) {
     const { data: memberships } = await supabaseForQuery
       .from('app_members')
       .select('app_id')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
 
     const userAppIds = memberships?.map((m) => m.app_id) || []
 

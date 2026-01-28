@@ -80,10 +80,31 @@ export function createRouteHandlerClient(
   return createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
     cookies: {
       getAll() {
-        return request.cookies.getAll().map((cookie) => ({
-          name: cookie.name,
-          value: cookie.value,
-        }))
+        // Try using request.cookies first (Next.js 15 way)
+        const cookies = request.cookies.getAll()
+        if (cookies.length > 0) {
+          return cookies.map((cookie) => ({
+            name: cookie.name,
+            value: cookie.value,
+          }))
+        }
+        
+        // Fallback to parsing cookie header manually (like middleware)
+        // This handles cases where cookies might not be parsed correctly
+        const cookieHeader = request.headers.get('cookie')
+        if (cookieHeader) {
+          return cookieHeader
+            .split('; ')
+            .map((cookie) => {
+              const [name, ...rest] = cookie.split('=')
+              return { 
+                name: name.trim(), 
+                value: decodeURIComponent(rest.join('=')) 
+              }
+            })
+        }
+        
+        return []
       },
       setAll(cookiesToSet) {
         cookiesToSet.forEach(({ name, value, options }) => {

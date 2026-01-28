@@ -50,9 +50,18 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
   } else if (error instanceof Error) {
     logger.error('Unexpected error occurred', error, { requestId });
   } else {
+    // Handle non-Error objects (e.g., Supabase errors, plain objects)
+    const errorMessage = 
+      error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : error && typeof error === 'object' && 'error' in error
+        ? String(error.error)
+        : String(error);
+    
     logger.error('Unknown error occurred', undefined, {
       requestId,
-      error: String(error),
+      error: errorMessage,
+      errorObject: error,
     });
   }
 
@@ -70,10 +79,21 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
       error
     );
   } else {
+    // Handle non-Error objects (e.g., Supabase errors, plain objects)
+    const errorMessage = 
+      error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : error && typeof error === 'object' && 'error' in error
+        ? String(error.error)
+        : 'An unknown error occurred';
+    
     baseError = new BaseError(
       ErrorCodes.SYSTEM_UNKNOWN_ERROR,
-      'An unknown error occurred',
-      { requestId }
+      errorMessage,
+      { 
+        requestId,
+        originalError: error && typeof error === 'object' ? JSON.stringify(error) : String(error)
+      }
     );
   }
 

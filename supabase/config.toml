@@ -30,8 +30,17 @@ file_size_limit = "50MiB"
 
 [auth]
 enabled = true
-site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://localhost:3000", "http://127.0.0.1:3000", "https://127.0.0.1:3000"]
+# Site URL for local development - use HTTPS to match NEXT_PUBLIC_APP_URL
+site_url = "https://localhost:3000"
+# Additional redirect URLs allowed for OAuth callbacks
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "https://127.0.0.1:3000/auth/callback",
+  "https://127.0.0.1:3000/api/auth/callback",
+  "https://localhost:3000",
+  "https://localhost:3000/auth/callback",
+  "https://localhost:3000/api/auth/callback"
+]
 jwt_expiry = 3600
 enable_signup = true
 
@@ -62,10 +71,13 @@ enabled = false
 enabled = false
 
 [auth.external.google]
-enabled = false
-client_id = ""
-secret = ""
+enabled = true
+# For local development, these should use env() function
+# Try GOOGLE_AUTH_CLIENT_ID first, fallback to GOOGLE_CLIENT_ID
+client_id = "env(GOOGLE_AUTH_CLIENT_ID)"
+secret = "env(GOOGLE_AUTH_SECRET)"
 redirect_uri = "https://127.0.0.1:54421/auth/v1/callback"
+skip_nonce_check = true
 
 [auth.external.keycloak]
 enabled = false

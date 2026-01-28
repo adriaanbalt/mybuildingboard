@@ -7,8 +7,8 @@
 import { cookies, headers } from 'next/headers';
 import { getAppIdFromRequest, validateAppId } from './detection';
 import { getAppConfig, getApp } from './config';
-import { requireAuth } from '@/lib/auth/helpers';
-import { requireAppMembership as authRequireAppMembership } from '@/lib/auth/helpers';
+import { requireAuth, requireAuthForAPI } from '@/lib/auth/helpers';
+import { requireAppMembership as authRequireAppMembership, requireAppMembershipForAPI as authRequireAppMembershipForAPI } from '@/lib/auth/helpers';
 import { NotFoundError, AuthorizationError } from '@/lib/errors';
 import type { AppWithConfig } from './types';
 
@@ -69,6 +69,37 @@ export async function requireAppMembership(appId?: string): Promise<{
 
   // Verify membership
   const result = await authRequireAppMembership(currentAppId);
+  return result;
+}
+
+/**
+ * Require app membership for API routes
+ * 
+ * Verifies user is authenticated and is a member of the app.
+ * Throws error if not authenticated or not a member.
+ * 
+ * @param appId - Optional app ID (uses current app if not provided)
+ * @returns App ID and user ID if valid
+ */
+export async function requireAppMembershipForAPI(appId?: string): Promise<{
+  appId: string;
+  userId: string;
+}> {
+  const { user } = await requireAuthForAPI();
+
+  const currentAppId = appId || (await getCurrentAppId());
+  if (!currentAppId) {
+    throw new NotFoundError('App not found');
+  }
+
+  // Validate app exists
+  const isValid = await validateAppId(currentAppId);
+  if (!isValid) {
+    throw new NotFoundError('App not found');
+  }
+
+  // Verify membership using API-safe version
+  const result = await authRequireAppMembershipForAPI(currentAppId);
   return result;
 }
 
