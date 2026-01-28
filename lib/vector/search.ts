@@ -125,61 +125,6 @@ export async function searchSimilarChunks(
 }
 
 /**
- * Calculate cosine similarity between two vectors.
- * 
- * @param vec1 - First vector
- * @param vec2 - Second vector
- * @returns Cosine similarity score (0-1)
- */
-function _calculateCosineSimilarity(vec1: number[], vec2: number[]): number {
-  if (vec1.length !== vec2.length) {
-    throw new Error('Vectors must have the same length');
-  }
-  
-  let dotProduct = 0;
-  let norm1 = 0;
-  let norm2 = 0;
-  
-  for (let i = 0; i < vec1.length; i++) {
-    dotProduct += vec1[i] * vec2[i];
-    norm1 += vec1[i] * vec1[i];
-    norm2 += vec2[i] * vec2[i];
-  }
-  
-  const magnitude = Math.sqrt(norm1) * Math.sqrt(norm2);
-  
-  if (magnitude === 0) {
-    return 0;
-  }
-  
-  return dotProduct / magnitude;
-}
-
-/**
- * Parse embedding vector from database format.
- * 
- * @param embedding - Embedding from database (string or array)
- * @returns Array of numbers
- */
-function _parseEmbeddingVector(embedding: string | number[] | null): number[] {
-  if (!embedding) {
-    throw new Error('Embedding is null or undefined');
-  }
-  
-  if (Array.isArray(embedding)) {
-    return embedding;
-  }
-  
-  if (typeof embedding === 'string') {
-    // Parse pgvector format: '[0.1,0.2,0.3,...]'
-    const cleaned = embedding.replace(/[\[\]]/g, '');
-    return cleaned.split(',').map(parseFloat);
-  }
-  
-  throw new Error(`Invalid embedding format: ${typeof embedding}`);
-}
-
-/**
  * Search for similar chunks with additional ranking by recency.
  * 
  * Combines similarity score with recency for ranking.
